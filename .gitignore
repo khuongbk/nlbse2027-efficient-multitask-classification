@@ -1,0 +1,13 @@
+/runs/
+/cache/
+/teacher/
+/logs/
+__pycache__/
+*.pt
+*.npy
+*.npz
+*.safetensors
+*.zip
+.ipynb_checkpoints/
+exports/
+venv/

@@ -1,0 +1,12 @@
+{
+  "name": "R7_6L_exits",
+  "teacher_layers": [
+    1,
+    3,
+    5,
+    7,
+    9,
+    11
+  ],
+  "micro_batch": 16
+}

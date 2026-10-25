@@ -1,0 +1,10 @@
+{
+  "name": "R6_4L_exits_lines",
+  "teacher_layers": [
+    2,
+    5,
+    8,
+    11
+  ],
+  "compact_mode": "lines"
+}

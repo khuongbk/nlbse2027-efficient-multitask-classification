@@ -1,0 +1,12 @@
+{
+  "name": "R0_4L_plain",
+  "teacher_layers": [
+    2,
+    5,
+    8,
+    11
+  ],
+  "compact_mode": "none",
+  "use_flags": false,
+  "use_exits": false
+}

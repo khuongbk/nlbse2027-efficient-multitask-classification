@@ -1,0 +1,10 @@
+{
+  "name": "R1_4L_compact_flag",
+  "teacher_layers": [
+    2,
+    5,
+    8,
+    11
+  ],
+  "use_exits": false
+}

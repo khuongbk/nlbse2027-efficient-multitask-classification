@@ -1,0 +1,10 @@
+{
+  "name": "R3_4L_exits_noKD",
+  "teacher_layers": [
+    2,
+    5,
+    8,
+    11
+  ],
+  "kd_alpha": 0.0
+}

@@ -1,0 +1,6 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+14:24:57 device NVIDIA L40S x 1 | train 214586 | validation 30655 | vocab 51416 -> 51418
+14:26:10 teacher logits in 70s; sign agreement with labels [0.9994 0.9999]
+14:26:12 device NVIDIA L40S x 1 | train 214586 | validation 30655 | vocab 51416 -> 51418
+14:26:16 encoded validation with {'max_length': 512, 'compact_mode': 'none', 'use_flags': False} in 2s; mean tokens 181.9, at max length 0.0394
+14:26:17 device NVIDIA L40S x 1 | train 214586 | validation 30655 | vocab 51416 -> 51418
