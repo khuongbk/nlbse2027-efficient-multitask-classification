@@ -1,0 +1,38 @@
+[
+  {
+    "padding": "sorted",
+    "mean_f1": 0.9405649199230859,
+    "gflops": 109166.99976769801,
+    "runtime_s": 8.25872770945231,
+    "padded_tokens": 4910360,
+    "real_tokens": 4764112,
+    "score_with_this_gpu_runtime": 0.9554094064274479,
+    "gpu": "NVIDIA GeForce RTX 4060 Laptop GPU",
+    "batch_size": 600,
+    "repetitions": 3
+  },
+  {
+    "padding": "dynamic",
+    "mean_f1": 0.9405649199230859,
+    "gflops": 323727.274476916,
+    "runtime_s": 23.967393000920612,
+    "padded_tokens": 15588005,
+    "real_tokens": 4764112,
+    "score_with_this_gpu_runtime": 0.9379636550552064,
+    "gpu": "NVIDIA GeForce RTX 4060 Laptop GPU",
+    "batch_size": 600,
+    "repetitions": 3
+  },
+  {
+    "padding": "global",
+    "mean_f1": 0.9405649199230859,
+    "gflops": 324740.815608832,
+    "runtime_s": 26.148597876230877,
+    "padded_tokens": 15695360,
+    "real_tokens": 4764112,
+    "score_with_this_gpu_runtime": 0.9374598446713499,
+    "gpu": "NVIDIA GeForce RTX 4060 Laptop GPU",
+    "batch_size": 600,
+    "repetitions": 3
+  }
+]

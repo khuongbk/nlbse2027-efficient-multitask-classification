@@ -42,16 +42,26 @@ reporting", selects checkpoints and calibrates thresholds. The hidden test set i
 ## Results
 
 Validation = public test split, 30,655 rows. GFLOPs are totals for one pass over the set, measured
-with the reference profiler loop. **Runtime and score are estimates** until the Colab T4 notebook is
-run: they use the runtime measured on an NVIDIA L40S x 5.32, the ratio between the baseline's
-official T4 runtime and the same baseline cell on the L40S (which reproduced its 2,666,510 GFLOPs and
-F1 0.9102 exactly).
+with the reference profiler loop.
 
-| Model | Vuln P / R / F1 | MAT P / R / F1 | Mean F1 | GFLOPs | Runtime (s) | Score |
+**Submitted model, Colab T4** (`notebooks/NLBSE27_Submission_Colab_T4.ipynb`, batch 600, sorted
+dynamic padding, 10 repetitions; `results/colab_t4_R8.json`):
+
+| Model | Vuln P / R / F1 | MAT P / R / F1 | Mean P / R / F1 | GFLOPs | Runtime (s) | Score |
+|---|---|---|---|---:|---:|---:|
+| CodeBERT baseline (official, T4) | 0.9427 / 0.9353 / 0.9390 | 0.9783 / 0.8020 / 0.8814 | 0.9605 / 0.8687 / 0.9102 | 2,666,510 | 192.10 | 0.7299 |
+| **Student R8 (T4)** | 0.9468 / 0.9390 / 0.9429 | 0.9956 / 0.8871 / 0.9382 | 0.9712 / 0.9131 / **0.9406** | **109,169** | **12.61** | **0.9545** |
+
+The other rows in this README (teacher, ablations) were measured during training on an NVIDIA L40S.
+Their F1 and GFLOPs are exact; runtime and score are **estimates**: L40S runtime x 5.32, the ratio
+between the baseline's official T4 runtime and the same baseline cell on the L40S (which reproduced
+its 2,666,510 GFLOPs and F1 0.9102 exactly). For R8 this estimate was 15.1 s and 0.9540, against
+12.61 s and 0.9545 measured on the T4, so the estimates are slightly conservative.
+
+| Model | Vuln P / R / F1 | MAT P / R / F1 | Mean F1 | GFLOPs | Runtime (s, est.) | Score (est.) |
 |---|---|---|---:|---:|---:|---:|
-| CodeBERT baseline (official, T4) | 0.9427 / 0.9353 / 0.9390 | 0.9783 / 0.8020 / 0.8814 | 0.9102 | 2,666,510 | 192.1 | 0.7299 |
 | Teacher, 12 layers | 0.9592 / 0.9455 / 0.9523 | 0.9890 / 0.8931 / 0.9386 | 0.9455 | 834,264 | ~62.9 | ~0.899 |
-| **Student R8 (submitted)** | 0.9468 / 0.9390 / 0.9429 | 0.9956 / 0.8871 / 0.9382 | **0.9406** | **109,167** | ~15.1 | **~0.954** |
+| Student R8 (L40S) | 0.9468 / 0.9390 / 0.9429 | 0.9956 / 0.8871 / 0.9382 | 0.9406 | 109,167 | ~15.1 | ~0.954 |
 
 R8 has 68.7M parameters (teacher 125.3M). Rows exit after layer 1-6:
 7,864 / 11,671 / 8,872 / 1,697 / 149 / 402, i.e. 2.2 layers on average.
@@ -89,7 +99,24 @@ What they show:
 
 ### Padding ablation
 
-PADDING_TABLE_PLACEHOLDER
+The reference notebook pads the whole evaluation set to one length (`padding=True` on all rows at
+once), so sorting alone cannot reduce padding. We therefore measured R8 with the same reference loop
+(batch 600; 3 repetitions on an RTX 4060 Laptop GPU, so runtimes are not T4 numbers) under three
+padding modes (`python -m nlbse27ee.padding_ablation`, `results/padding_ablation_R8_rtx4060_b600.json`):
+
+| Padding | Padded tokens | Mean F1 | GFLOPs | Runtime (s), RTX 4060 Laptop |
+|---|---:|---:|---:|---:|
+| `global`: whole set padded to one length (as the baseline) | 15,695,360 | 0.9406 | 324,741 | 26.15 |
+| `dynamic`: each batch padded to its longest row, original order | 15,588,005 | 0.9406 | 323,727 | 23.97 |
+| `sorted`: rows sorted by length, then `dynamic` (used for all reported results) | 4,910,360 | 0.9406 | 109,167 | 8.26 |
+
+The real token count is 4,764,112. Dynamic padding alone barely helps at batch 600: almost every
+batch of 600 rows in the original order contains a 512-token row. Sorting by length is what makes
+per-batch padding effective: padded tokens drop to 3% above the real count and GFLOPs by 3.0x, with
+identical F1. Of R8's 24.4x GFLOPs reduction relative to the baseline (2,666,510 to 109,167), the model
+(depth and width pruning, early exit, input compaction) accounts for 8.2x under the baseline's own
+padding, and sorted dynamic padding for the remaining 3.0x. The `sorted` GFLOPs match the L40S
+measurement exactly, as GFLOPs do not depend on the GPU.
 
 ## Differences from the baseline notebook
 
