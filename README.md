@@ -89,13 +89,63 @@ What they show:
 - **Compaction + flags** add 0.004 F1 (MAT 0.928 to 0.938) and remove 14% of the GFLOPs.
 - **FFN pruning** keeps F1 and removes ~26% of the GFLOPs.
 - **Six layers with early exit** beat four: most rows still exit after one or two layers.
-- **Distillation adds nothing measurable** (R3 vs R2): the teacher fits the training set almost
-  perfectly (99.94% sign agreement), so its soft targets carry little beyond the labels. The teacher
+- **Distillation adds nothing measurable** (R3 vs R2): the teacher's logits have the same sign as
+  the hard training labels for 99.94% (Vulnerable) and 99.99% (MAT) of the 214,586 training rows
+  (`results/logs/prepare_cache.log`), so its soft targets carry little beyond the labels. The teacher
   matters through the weights the student is initialized from.
-- **MAT F1 is capped near 0.94**: about 13% of MAT-positive functions contain no tag anywhere in
-  `Function`.
+- **MAT recall is capped by the input, not the model**: 61 of the 505 MAT-positive test functions
+  (12.1%) contain no `TODO`/`FIXME`/`HACK`/`XXX` anywhere in `Function`. See "MAT error analysis".
 - Threshold/margin tuning is not optimistic beyond ~0.002 F1: a 2-fold split of the validation set
   (tune on one half, evaluate on the other) is in each `results/runs/*/results.json` (`holdout`).
+
+### MAT error analysis (R8, public test)
+
+MAT is highly imbalanced: 505 of 30,655 test functions (1.65%) are positive. R8 makes 448 true
+positives, 2 false positives and 57 false negatives (precision 0.9956, recall 0.8871). By the flag
+token each function receives:
+
+| Group | Functions | MAT-positive | Predicted positive | TP | FP | FN |
+|---|---:|---:|---:|---:|---:|---:|
+| tag inside a comment (`<satd_c>`) | 444 | 443 | 444 | 443 | 1 | 0 |
+| tag elsewhere (`<satd_w>`) | 7 | 1 | 1 | 0 | 1 | 1 |
+| no tag | 30,204 | 61 | 5 | 5 | 0 | 56 |
+
+56 of the 57 false negatives are functions whose `Function` text contains no tag at all; on every
+function with a tag in a comment, R8 is correct except one false positive. MAT recall is therefore
+bounded by what `Function` contains, not by the model.
+
+### Early-exit policy of R8
+
+Per-exit thresholds `tau[k, label]` (in logit space) and margins `m[k, label]` selected on validation:
+
+| Exit after layer | 1 | 2 | 3 | 4 | 5 | 6 |
+|---|---:|---:|---:|---:|---:|---:|
+| `tau` Vulnerable / MAT | -1.379 / 0.965 | -0.586 / 5.330 | 1.062 / 1.052 | 0.683 / 1.676 | 0.002 / 0.717 | 1.000 / 1.847 |
+| `m` Vulnerable / MAT | 7.0 / 0.0 | 8.0 / 12.0 | 6.0 / 7.0 | 2.5 / 5.0 | 4.0 / 0.0 | (final) |
+| mean F1 of this exit alone | 0.8525 | 0.9143 | 0.9352 | 0.9386 | 0.9420 | 0.9415 |
+| rows exiting here | 7,864 | 11,671 | 8,872 | 1,697 | 149 | 402 |
+
+A row exits after layer *k* when `|z[k, label] - tau[k, label]| >= m[k, label]` for both labels. With
+`m = 0` the MAT condition always holds, so at exits 1 and 5 the decision depends on Vulnerable alone:
+the search found that MAT, mostly negative and carried by the flag token, is already decided reliably
+there. At exit 2 the MAT margin is the strictest (12.0), so rows whose MAT logit is near that exit's
+threshold continue to deeper layers.
+
+### Training and calibration details
+
+| Item | Value |
+|---|---|
+| Classification head (every exit, and the teacher) | masked mean pooling over all non-padding tokens of that layer's hidden states, dropout 0.1 (training only), one `Linear(768, 2)`; no `<s>` pooler and no tanh MLP. Student heads start from the teacher's head |
+| Student loss | `sum_k w_k [ (1 - a) BCE(z_k, y) + a T^2 BCE(z_k / T, sigmoid(t / T)) ]`, `a = 0.5`, `T = 2`, `t` = teacher logits, `w_k = k / 21` for the 6 exits (0.048, 0.095, 0.143, 0.190, 0.238, 0.286) |
+| Teacher loss | BCE on the final head only |
+| Optimizer | AdamW (betas 0.9/0.999, eps 1e-8); weight decay 0.01 on weight matrices, 0 on biases, LayerNorm and embeddings; heads use 10x the base learning rate |
+| Student R8 schedule | lr 4e-5 (heads 4e-4), effective batch 128 (16 x 8 accumulation), linear warmup over 6% of updates then linear decay, gradient clipping 1.0, fp16 AMP; max 10 epochs, early stopping on final-exit validation mean F1 with patience 3 (best epoch 6) |
+| Teacher schedule | lr 3e-5 (head 3e-4), effective batch 64 (16 x 4 GPUs, DDP), same warmup/decay/clipping/AMP; best epoch 9 of 10 |
+| Batching | training: length-bucketed (chunks of 64 batches sorted by length, batches shuffled); inference: sorted dynamic padding |
+| FFN pruning | per layer, keep the 1,536 of 3,072 neurons with the largest `mean |GELU(fc1(x))|` over the real tokens of 4,096 training rows, times the L2 norm of the neuron's `fc2` column |
+| Thresholds `tau` | for each exit and label independently: the F1-maximizing threshold on validation (precision-recall curve), placed midway to the next lower score |
+| Margins `m` | coordinate ascent over exits 1-5; at each exit the two margins are searched jointly over {0, 0.5, ..., 4, 5, 6, 7, 8, 10, 12, inf}^2; up to 3 passes. Objective: the official score, with GFLOPs from a simulator of the profiler (error < 0.02%) and runtime proportional to GFLOPs (calibrated on a measured run without early exit). The last exit always decides |
+| Decision | label = 1 when `z[k, label] > tau[k, label]` at the exit *k* where the row leaves |
 
 ### Padding ablation
 
