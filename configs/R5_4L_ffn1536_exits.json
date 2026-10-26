@@ -6,5 +6,6 @@
     8,
     11
   ],
-  "ffn_size": 1536
+  "ffn_size": 1536,
+  "validation": "inner"
 }

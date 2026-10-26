@@ -1,0 +1,16 @@
+{
+  "name": "A2_R11_ema",
+  "teacher_layers": [
+    1,
+    3,
+    5,
+    7,
+    9,
+    11
+  ],
+  "micro_batch": 16,
+  "ffn_size": 1536,
+  "epochs": 14,
+  "validation": "inner",
+  "ema_decay": 0.999
+}

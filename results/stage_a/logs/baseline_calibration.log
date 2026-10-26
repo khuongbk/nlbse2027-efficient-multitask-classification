@@ -1,0 +1,31 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+14:53:28 device NVIDIA L40S x 1 | train 197419 | validation (inner) 17167 | public test 30655 | vocab 51416 -> 51418 | split bae8e73a0dffcdfc
+{
+  "metrics": {
+    "Vulnerability": {
+      "precision": 0.9426508923200321,
+      "recall": 0.9353362514922403,
+      "f1": 0.9389793268750625,
+      "tp": 9402,
+      "fp": 572,
+      "tn": 20031,
+      "fn": 650
+    },
+    "MAT": {
+      "precision": 0.9782608695652174,
+      "recall": 0.801980198019802,
+      "f1": 0.8813928182807399,
+      "tp": 405,
+      "fp": 9,
+      "tn": 30141,
+      "fn": 100
+    },
+    "mean_precision": 0.9604558809426247,
+    "mean_recall": 0.8686582247560212,
+    "mean_f1": 0.9101860725779012
+  },
+  "avg_runtime_s": 36.07493455410004,
+  "avg_gflops": 2666509.7131617307,
+  "t4_runtime_factor": 5.324983345052413,
+  "gpu": "NVIDIA L40S"
+}

@@ -119,7 +119,7 @@ def predict_labels(model, encoder, texts, device="cuda", batch_size: int = 600) 
 def collect_exit_logits(model, packed: Packed, pad_id: int, device, batch_size: int = 600) -> np.ndarray:
     """[layers, rows, 2] raw logits of every exit, same batching/precision as inference."""
     model.eval()
-    out = np.zeros((model.cfg.layers, len(packed), 2), dtype=np.float32)
+    out = np.zeros((model.cfg.exits, len(packed), 2), dtype=np.float32)
     for rows in sorted_batches(packed.lengths, batch_size):
         input_ids, attention_mask = pad_rows(packed, rows, pad_id)
         with torch.autocast("cuda", dtype=torch.float16, enabled=device.type == "cuda"):

@@ -8,5 +8,6 @@
   ],
   "compact_mode": "none",
   "use_flags": false,
-  "use_exits": false
+  "use_exits": false,
+  "validation": "inner"
 }

@@ -66,14 +66,23 @@ def decisions(all_logits, thresholds, layer) -> np.ndarray:
 
 
 class FlopsModel:
-    """GFLOPs the profiler reports for one pass over length-sorted batches."""
+    """GFLOPs the profiler reports for one pass over length-sorted batches.
+
+    Exit ``e`` is evaluated on the rows still active (exit index >= e), at the padded
+    width of those rows; transformer layer ``j`` runs on the rows whose exit index is at
+    least ``j + exit0``. Pooling costs ``hidden`` FLOPs per token (mean) or ``3 * hidden``
+    (attention: score projection + weighted sum); the classifier ``4 * hidden`` per row.
+    """
 
     def __init__(self, lengths: np.ndarray, ffn_sizes: list[int], hidden: int = 768,
-                 batch_size: int = 600):
+                 batch_size: int = 600, scale: float = 1.0, exit0: bool = False, head: str = "mean"):
+        self.scale = scale  # multiply results, e.g. to express a subset at full-test-set size
         self.batches = [np.sort(lengths[b]) for b in _sorted_index_batches(lengths, batch_size)]
-        self.per_token = np.array([2 * hidden * (4 * hidden + 2 * f) + hidden for f in ffn_sizes],
-                                  dtype=np.float64)
+        self.layer_cost = np.array([2 * hidden * (4 * hidden + 2 * f) for f in ffn_sizes], dtype=np.float64)
+        self.pool_cost = hidden * (3 if head == "attn" else 1)
         self.head = 2 * hidden * 2
+        self.offset = int(exit0)
+        self.exits = len(ffn_sizes) + self.offset
         self.order = np.argsort(lengths, kind="stable")
         self.batch_size = batch_size
 
@@ -82,14 +91,15 @@ class FlopsModel:
         layer_sorted = layer_of_row[self.order]
         for b, lengths in enumerate(self.batches):
             exits = layer_sorted[b * self.batch_size:b * self.batch_size + len(lengths)]
-            for k, cost in enumerate(self.per_token):
-                active = exits >= k
+            for e in range(self.exits):
+                active = exits >= e
                 n = int(active.sum())
                 if n == 0:
                     break
                 width = int(lengths[active].max())
+                cost = self.pool_cost + (self.layer_cost[e - self.offset] if e >= self.offset else 0.0)
                 total += n * width * cost + n * self.head
-        return total / 1e9
+        return total * self.scale / 1e9
 
 
 def _sorted_index_batches(lengths, batch_size):

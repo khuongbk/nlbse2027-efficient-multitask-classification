@@ -10,5 +10,6 @@
   ],
   "micro_batch": 16,
   "ffn_size": 1536,
-  "epochs": 14
+  "epochs": 14,
+  "validation": "inner"
 }

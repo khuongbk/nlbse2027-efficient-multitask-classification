@@ -8,5 +8,6 @@
     9,
     11
   ],
-  "micro_batch": 16
+  "micro_batch": 16,
+  "validation": "inner"
 }
