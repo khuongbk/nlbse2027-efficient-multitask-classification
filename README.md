@@ -23,14 +23,14 @@ profiler FLOPs, 10 repetitions):
 | Model | Vuln P / R / F1 | MAT P / R / F1 | Mean P / R / F1 | GFLOPs | Runtime (s) | Score |
 |---|---|---|---|---:|---:|---:|
 | CodeBERT baseline (official, T4) | 0.9427 / 0.9353 / 0.9390 | 0.9783 / 0.8020 / 0.8814 | 0.9605 / 0.8687 / 0.9102 | 2,666,510 | 192.10 | 0.7299 |
-| **Submission** (`A2_R11_all_full`) | 0.9483 / 0.9390 / 0.9436 | 0.9955 / 0.8812 / 0.9349 | 0.9719 / 0.9101 / **0.9392** | **55,443** | ~11.6 | **~0.9575** |
+| **Submission** (`A2_R11_all_full`) | 0.9483 / 0.9390 / 0.9436 | 0.9955 / 0.8812 / 0.9349 | 0.9719 / 0.9101 / **0.9392** | **55,443** | **8.16** (T4) | **0.9582** (T4) |
 | Same recipe, held out (`A2_R11_all`) | 0.9494 / 0.9276 / 0.9384 | 0.9910 / 0.8733 / 0.9284 | 0.9702 / 0.9004 / 0.9334 | 53,214 | ~12.0 | ~0.9541 |
 
 The submission is trained on all training rows and calibrates its thresholds on the public test (see
 "Data use and model selection"); the held-out row is the same recipe trained on 92% of the training
-rows and never tuned on the public test, so it is the unbiased estimate. Runtime and score are
-estimates from an NVIDIA L40S (x 5.32, see "Results") until the Colab T4 notebook is run on the
-submission; GFLOPs and F1 do not depend on the GPU. The model has 68.7M parameters (teacher 125.3M)
+rows and never tuned on the public test, so it is the unbiased estimate (its runtime and score are
+L40S-based estimates, see "Results"). The submission row was measured on a Colab Tesla T4 with
+`notebooks/NLBSE27_Submission_Colab_T4.ipynb` (`results/stage_b/colab_t4_A2_R11_all_full.json`). The model has 68.7M parameters (teacher 125.3M)
 and a row runs 1.07 of its 6 transformer layers on average.
 
 ## Method
@@ -86,7 +86,8 @@ GFLOPs are totals for one pass over the public test, measured with the reference
 independent of the GPU. Runtimes were measured on an NVIDIA L40S and converted with the factor 5.32
 (the baseline's official T4 runtime divided by the same baseline cell on the L40S, which reproduced its
 2,666,510 GFLOPs and F1 0.9102 exactly); they are **estimates** except where marked T4. In an earlier
-check the estimate was conservative (15.1 s estimated, 12.6 s measured on a T4).
+check the estimate was conservative (15.1 s estimated, 12.6 s measured on a T4), and for the
+submission too (11.6 s estimated, 8.16 s measured on a T4).
 
 ### Stage A: architecture and input (`results/stage_a/`)
 

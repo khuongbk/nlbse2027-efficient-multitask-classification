@@ -1,4 +1,4 @@
-# Câu chuyện của lời giải: từ CodeBERT 0,73 điểm đến early-exit UniXcoder ~0,958 điểm
+# Câu chuyện của lời giải: từ CodeBERT 0,73 điểm đến early-exit UniXcoder 0,958 điểm
 
 Tài liệu này kể lại lời giải theo đúng trình tự nó được xây dựng: nhìn ra điều gì trong đề bài, thử gì,
 cái gì có tác dụng, cái gì không, và vì sao model cuối cùng trông như vậy. Số liệu kỹ thuật đầy đủ nằm
@@ -195,7 +195,7 @@ Trên public test, `ema_exit0_attn` nhỉnh hơn `all` 0,0007 điểm. Có thể
    loại rò rỉ mà quy trình được thiết kế để tránh.
 2. **0,0007 nằm trong nhiễu.** Hai model hơn nhau ở hai mặt khác nhau: `ema_exit0_attn` F1 cao hơn
    (0,9361 so với 0,9334), `all` rẻ hơn (53k so với 64k GFLOPs). Đổi seed hay epoch có thể đảo thứ tự.
-3. **Không mất gì trên thực tế**: sau khi train lại trên toàn bộ dữ liệu, `all` đạt ~0,9575, cao hơn cả
+3. **Không mất gì trên thực tế**: sau khi train lại trên toàn bộ dữ liệu, `all` đạt 0,9582 (đo trên T4), cao hơn cả
    hai con số trên.
 
 Trong paper, cả hai được báo cáo như ablation, và nêu rõ tiêu chí chọn.
@@ -209,12 +209,16 @@ test.
 | Model | Vuln F1 | MAT F1 | Mean F1 | GFLOPs | Runtime | Điểm |
 |---|---:|---:|---:|---:|---:|---:|
 | Baseline CodeBERT (T4 chính thức) | 0,9390 | 0,8814 | 0,9102 | 2.666.510 | 192,1 s | 0,7299 |
-| Teacher UniXcoder 12 lớp | 0,9508 | 0,9342 | 0,9425 | 834.264 | ~62 s | 0,8974 |
-| R11 full | 0,9417 | 0,9347 | 0,9382 | 111.055 | ~14,9 s | ~0,9525 |
-| **Model nộp `A2_R11_all_full`** | **0,9436** | **0,9349** | **0,9392** | **55.443** | **~11,6 s** | **~0,9575** |
+| Teacher UniXcoder 12 lớp (ước tính) | 0,9508 | 0,9342 | 0,9425 | 834.264 | ~62 s | 0,8974 |
+| R11 full (ước tính) | 0,9417 | 0,9347 | 0,9382 | 111.055 | ~14,9 s | ~0,9525 |
+| **Model nộp `A2_R11_all_full` (T4)** | **0,9436** | **0,9349** | **0,9392** | **55.443** | **8,16 s** | **0,9582** |
 
-Runtime và điểm hiện là ước tính từ GPU L40S (nhân hệ số 5,32, lấy từ tỉ lệ thời gian của chính baseline
-trên L40S và T4); sẽ thay bằng số đo trên Colab T4. F1 và GFLOPs không phụ thuộc GPU.
+Model nộp được đo trên Colab Tesla T4 bằng notebook của nhóm, theo đúng vòng đo của ban tổ chức
+(`results/stage_b/colab_t4_A2_R11_all_full.json`). Các dòng "ước tính" lấy runtime đo trên L40S nhân
+hệ số 5,32 (tỉ lệ thời gian của chính baseline trên T4 và L40S); ước tính này hơi bi quan: với model nộp
+nó dự đoán 11,6 s, còn T4 đo được 8,16 s. F1 và GFLOPs không phụ thuộc GPU.
+
+So với baseline: điểm **+0,228**, F1 +0,029, GFLOPs ít hơn **48 lần**, runtime nhanh hơn **23 lần**.
 
 Model nộp có 68,7M tham số (teacher 125,3M). **Trung bình mỗi hàng chỉ chạy 1,07 trong 6 lớp**:
 
@@ -274,8 +278,6 @@ không phải bởi model.
 
 ## 11. Hạn chế và việc còn lại
 
-- Runtime và điểm của model nộp là ước tính cho tới khi chạy notebook Colab T4
-  (`notebooks/NLBSE27_Submission_Colab_T4.ipynb`).
 - Mỗi cấu hình mới chạy một seed; các chênh lệch dưới ~0,002 điểm không nên diễn giải là có ý nghĩa.
 - Hiệu quả của OOF distillation chưa nhất quán; cần thêm seed để kết luận.
 - Model nộp calibrate ngưỡng trên public test (được hướng dẫn cho phép); con số không thiên lệch của
