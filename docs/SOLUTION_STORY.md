@@ -2,7 +2,8 @@
 
 Tài liệu này kể lại lời giải theo đúng trình tự nó được xây dựng: nhìn ra điều gì trong đề bài, thử gì,
 cái gì có tác dụng, cái gì không, và vì sao model cuối cùng trông như vậy. Số liệu kỹ thuật đầy đủ nằm
-trong [README](../README.md); quy tắc thi và nơi đáp ứng nằm trong [COMPLIANCE](COMPLIANCE.md).
+trong [README](../README.md); giải thích chi tiết teacher, student và exit nằm trong
+[MODEL_EXPLAINED](MODEL_EXPLAINED.md); quy tắc thi và nơi đáp ứng nằm trong [COMPLIANCE](COMPLIANCE.md).
 
 ---
 
@@ -61,7 +62,7 @@ Nên toàn bộ công việc được làm lại theo quy trình sạch:
 | public test (30.655 hàng) | đo **một lần** cho mỗi model, sau khi mọi lựa chọn đã xong |
 | 100% train (214.586 hàng) | huấn luyện lại công thức thắng để nộp |
 
-Quy tắc được cố định từ đầu: **chọn bằng điểm trên tập 8%, không nhìn public test để chọn.** Phần 8
+Quy tắc được cố định từ đầu: **chọn bằng điểm trên tập 8%, không nhìn public test để chọn.** Phần 6
 giải thích vì sao quy tắc này được giữ ngay cả khi public test "gợi ý" một lựa chọn khác.
 
 Ở bước cuối, ngưỡng của model nộp được calibrate trên public test, vì hướng dẫn của ban tổ chức nói rõ
@@ -180,7 +181,7 @@ thật sự mang thông tin ngoài nhãn, như "hàng này khó/mơ hồ".
 | + EMA | 0,9567 | 0,9356 | 115.143 | 0,9506 |
 | + EMA + OOF | 0,9551 | 0,9367 | 101.284 | 0,9524 |
 | + EMA + exit 0 + attention | 0,9588 | 0,9361 | 63.689 | 0,9548 |
-| **+ cả ba (`A2_R11_all`)** | **0,9604** | 0,9334 | **53.214** | 0,9541 |
+| **+ cả ba (`A2_R11_all`)** | **0,9604** | 0,9334 | **53.214** | 0,9541 (T4 đo được: 0,9548) |
 
 - **Exit 0 + attention là bước tiến lớn nhất**: GFLOPs từ 111k xuống 54–64k.
 - EMA giúp một chút; OOF tăng F1 khi đứng riêng (+0,0019) nhưng không nhất quán khi kết hợp.
@@ -281,4 +282,4 @@ không phải bởi model.
 - Mỗi cấu hình mới chạy một seed; các chênh lệch dưới ~0,002 điểm không nên diễn giải là có ý nghĩa.
 - Hiệu quả của OOF distillation chưa nhất quán; cần thêm seed để kết luận.
 - Model nộp calibrate ngưỡng trên public test (được hướng dẫn cho phép); con số không thiên lệch của
-  công thức là `A2_R11_all` (F1 0,9334, ~0,9541 điểm).
+  công thức là `A2_R11_all` (F1 0,9334; đo trên T4: 8,33 s, 0,9548 điểm).

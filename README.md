@@ -24,13 +24,14 @@ profiler FLOPs, 10 repetitions):
 |---|---|---|---|---:|---:|---:|
 | CodeBERT baseline (official, T4) | 0.9427 / 0.9353 / 0.9390 | 0.9783 / 0.8020 / 0.8814 | 0.9605 / 0.8687 / 0.9102 | 2,666,510 | 192.10 | 0.7299 |
 | **Submission** (`A2_R11_all_full`) | 0.9483 / 0.9390 / 0.9436 | 0.9955 / 0.8812 / 0.9349 | 0.9719 / 0.9101 / **0.9392** | **55,443** | **8.16** (T4) | **0.9582** (T4) |
-| Same recipe, held out (`A2_R11_all`) | 0.9494 / 0.9276 / 0.9384 | 0.9910 / 0.8733 / 0.9284 | 0.9702 / 0.9004 / 0.9334 | 53,214 | ~12.0 | ~0.9541 |
+| Same recipe, held out (`A2_R11_all`) | 0.9494 / 0.9276 / 0.9384 | 0.9910 / 0.8733 / 0.9284 | 0.9702 / 0.9004 / 0.9334 | 53,214 | 8.33 (T4) | 0.9548 (T4) |
 
 The submission is trained on all training rows and calibrates its thresholds on the public test (see
 "Data use and model selection"); the held-out row is the same recipe trained on 92% of the training
-rows and never tuned on the public test, so it is the unbiased estimate (its runtime and score are
-L40S-based estimates, see "Results"). The submission row was measured on a Colab Tesla T4 with
-`notebooks/NLBSE27_Submission_Colab_T4.ipynb` (`results/stage_b/colab_t4_A2_R11_all_full.json`). The model has 68.7M parameters (teacher 125.3M)
+rows and never tuned on the public test, so it is the unbiased estimate and the one comparable to the
+baseline, which also never consults the public test before its single evaluation. Both rows were measured
+on a Colab Tesla T4 with `notebooks/NLBSE27_Submission_Colab_T4.ipynb`
+(`results/stage_b/colab_t4_A2_R11_all_full.json`, `results/stage_a2/colab_t4_A2_R11_all.json`). The model has 68.7M parameters (teacher 125.3M)
 and a row runs 1.07 of its 6 transformer layers on average.
 
 ## Method
@@ -118,7 +119,7 @@ scaled to the public test's size); runs are chosen by it.
 | A2_R11_ema | + EMA of the weights | 0.9567 | 0.9356 | 115,143 | 0.9506 |
 | A2_R11_oof_ema | + EMA + out-of-fold distillation | 0.9551 | 0.9367 | 101,284 | 0.9524 |
 | A2_R11_ema_exit0_attn | + EMA + exit 0 + attention pooling | 0.9588 | 0.9361 | 63,689 | 0.9548 |
-| **A2_R11_all** | + all three (winner) | **0.9604** | 0.9334 | **53,214** | 0.9541 |
+| **A2_R11_all** | + all three (winner) | **0.9604** | 0.9334 | **53,214** | 0.9541 (T4: 0.9548) |
 
 ### What the ablations show
 
@@ -278,7 +279,8 @@ notebooks/        training walkthrough; Colab T4 evaluation
 results/          stage_a/, stage_a2/, stage_b/: config, history and results of every run, logs, summaries;
                   exploratory_public_selection/: the earlier round that selected on the public test
 docs/             COMPLIANCE.md: each competition requirement and where it is met;
-                  SOLUTION_STORY.md: the solution told as a story (Vietnamese)
+                  SOLUTION_STORY.md: the solution told as a story (Vietnamese);
+                  MODEL_EXPLAINED.md: teacher, student and exits in detail (English and Vietnamese)
 ```
 
 ## License
