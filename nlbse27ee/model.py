@@ -26,10 +26,16 @@ class ModelConfig:
     layer_norm_eps: float = 1e-5
     dropout: float = 0.1
     teacher_layers: list[int] = field(default_factory=list)
+    exit0: bool = False     # an extra exit on the embeddings, before any transformer layer
+    head: str = "mean"      # exit pooling: "mean" (masked mean) or "attn" (learned attention pooling)
 
     @property
     def layers(self) -> int:
         return len(self.ffn_sizes)
+
+    @property
+    def exits(self) -> int:
+        return self.layers + int(self.exit0)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -68,6 +74,26 @@ class Layer(nn.Module):
         return (x, activation) if return_ffn else x
 
 
+class AttentionPoolHead(nn.Module):
+    """Softmax-weighted token pooling, then a linear classifier.
+
+    The score layer starts at zero, so the head starts as exact mean pooling.
+    """
+
+    def __init__(self, hidden: int):
+        super().__init__()
+        self.score = nn.Linear(hidden, 1)
+        self.out = nn.Linear(hidden, 2)
+        nn.init.zeros_(self.score.weight)
+        nn.init.zeros_(self.score.bias)
+
+    def forward(self, x: torch.Tensor, attention_mask: torch.Tensor, drop: nn.Module) -> torch.Tensor:
+        scores = self.score(x).squeeze(-1).float().masked_fill(attention_mask == 0, float("-inf"))
+        weights = torch.softmax(scores, dim=1).unsqueeze(-1).to(x.dtype)
+        pooled = (x * weights).sum(1, dtype=torch.float32)
+        return self.out(drop(pooled))
+
+
 class EarlyExitUniXcoder(nn.Module):
     def __init__(self, cfg: ModelConfig):
         super().__init__()
@@ -79,8 +105,9 @@ class EarlyExitUniXcoder(nn.Module):
         self.emb_ln = nn.LayerNorm(hidden, eps=cfg.layer_norm_eps)
         self.drop = nn.Dropout(cfg.dropout)
         self.layers = nn.ModuleList(Layer(cfg, size) for size in cfg.ffn_sizes)
-        self.exits = nn.ModuleList(nn.Linear(hidden, 2) for _ in cfg.ffn_sizes)
-        self.set_exit_policy(torch.zeros(cfg.layers, 2), torch.full((cfg.layers, 2), float("inf")))
+        make_head = (lambda: AttentionPoolHead(hidden)) if cfg.head == "attn" else (lambda: nn.Linear(hidden, 2))
+        self.exits = nn.ModuleList(make_head() for _ in range(cfg.exits))
+        self.set_exit_policy(torch.zeros(cfg.exits, 2), torch.full((cfg.exits, 2), float("inf")))
 
     def set_exit_policy(self, thresholds, margins) -> None:
         """Logit thresholds and confidence margins per exit, kept in float32."""
@@ -111,28 +138,36 @@ class EarlyExitUniXcoder(nn.Module):
         summed = (x * mask.to(x.dtype)).sum(1, dtype=torch.float32)
         return summed / mask.sum(1).float().clamp_min(1.0)
 
+    def exit_logits(self, k: int, x: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
+        head = self.exits[k]
+        if isinstance(head, nn.Linear):
+            return head(self.drop(self.pool(x, attention_mask))).float()
+        return head(x, attention_mask, self.drop).float()
+
     def all_exits(self, input_ids: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
-        """Raw logits of every exit, shape [layers, batch, 2] (training/calibration)."""
+        """Raw logits of every exit, shape [exits, batch, 2] (training/calibration)."""
         x = self.embed(input_ids, attention_mask)
         attn_mask = attention_mask.bool()[:, None, None, :]
-        outputs = []
-        for layer, head in zip(self.layers, self.exits):
+        outputs = [self.exit_logits(0, x, attention_mask)] if self.cfg.exit0 else []
+        for layer in self.layers:
             x = layer(x, attn_mask)
-            outputs.append(head(self.drop(self.pool(x, attention_mask))).float())
+            outputs.append(self.exit_logits(len(outputs), x, attention_mask))
         return torch.stack(outputs)
 
     def forward(self, input_ids: torch.Tensor, attention_mask: torch.Tensor) -> EEOutput:
         """Early-exit inference; ``sigmoid(logits) > 0.5`` gives the labels."""
         batch = input_ids.shape[0]
-        last = self.cfg.layers - 1
+        last = self.cfg.exits - 1
+        offset = int(self.cfg.exit0)   # exit k follows k - offset + 1 transformer layers
         logits = torch.zeros(batch, 2, dtype=torch.float32, device=input_ids.device)
         exit_layer = torch.full((batch,), last, dtype=torch.long, device=input_ids.device)
         index = torch.arange(batch, device=input_ids.device)
         mask = attention_mask
         x = self.embed(input_ids, mask)
-        for k, (layer, head) in enumerate(zip(self.layers, self.exits)):
-            x = layer(x, mask.bool()[:, None, None, :])
-            z = head(self.pool(x, mask)).float() - self.exit_thresholds[k]
+        for k in range(self.cfg.exits):
+            if k >= offset:
+                x = self.layers[k - offset](x, mask.bool()[:, None, None, :])
+            z = self.exit_logits(k, x, mask) - self.exit_thresholds[k]
             if k == last:
                 logits[index] = z
                 break
@@ -201,7 +236,8 @@ def to_teacher_state(model: EarlyExitUniXcoder, type_vocab_size: int = 10) -> di
                                ("output.LayerNorm", "ln2")):
             out[p + target + ".weight"] = s[q + source + ".weight"]
             out[p + target + ".bias"] = s[q + source + ".bias"]
-    last = model.cfg.layers - 1
+    assert model.cfg.head == "mean", "teacher checkpoints use a plain linear head"
+    last = model.cfg.exits - 1
     out["classifier.weight"] = s[f"exits.{last}.weight"]
     out["classifier.bias"] = s[f"exits.{last}.bias"]
     return out
@@ -215,7 +251,7 @@ def teacher_layer_count(state: dict) -> int:
 def build_from_teacher(state: dict, teacher_layers: list[int], ffn_keep: list[torch.Tensor | None],
                        vocab_size: int | None = None,
                        new_token_init: dict[int, list[int]] | None = None,
-                       dropout: float = 0.1) -> EarlyExitUniXcoder:
+                       dropout: float = 0.1, exit0: bool = False, head: str = "mean") -> EarlyExitUniXcoder:
     """Copy selected teacher layers (optionally FFN-pruned) into a new model.
 
     ``ffn_keep[i]`` holds the FFN neuron indices kept in student layer ``i``
@@ -230,7 +266,7 @@ def build_from_teacher(state: dict, teacher_layers: list[int], ffn_keep: list[to
     cfg = ModelConfig(vocab_size=vocab_size, ffn_sizes=ffn_sizes, hidden_size=hidden,
                       heads=hidden // 64,
                       max_positions=state["backbone.embeddings.position_embeddings.weight"].shape[0],
-                      dropout=dropout, teacher_layers=list(teacher_layers))
+                      dropout=dropout, teacher_layers=list(teacher_layers), exit0=exit0, head=head)
     model = EarlyExitUniXcoder(cfg)
     target = {}
     table = torch.zeros(vocab_size, hidden)
@@ -263,8 +299,13 @@ def build_from_teacher(state: dict, teacher_layers: list[int], ffn_keep: list[to
         target[f"layers.{i}.fc2.bias"] = state[p + "output.dense.bias"]
         target[f"layers.{i}.ln2.weight"] = state[p + "output.LayerNorm.weight"]
         target[f"layers.{i}.ln2.bias"] = state[p + "output.LayerNorm.bias"]
-        target[f"exits.{i}.weight"] = state["classifier.weight"]
-        target[f"exits.{i}.bias"] = state["classifier.bias"]
+    for k in range(cfg.exits):   # every exit head starts from the teacher's classifier
+        prefix = f"exits.{k}." + ("out." if head == "attn" else "")
+        target[prefix + "weight"] = state["classifier.weight"]
+        target[prefix + "bias"] = state["classifier.bias"]
+        if head == "attn":
+            target[f"exits.{k}.score.weight"] = torch.zeros(1, hidden)
+            target[f"exits.{k}.score.bias"] = torch.zeros(1)
     model.load_state_dict({key: value.clone() for key, value in target.items()}, strict=True)
     return model
 

@@ -23,5 +23,6 @@
   "micro_batch": 16,
   "effective_batch": 64,
   "lr": 3e-05,
-  "head_lr": 0.0003
+  "head_lr": 0.0003,
+  "validation": "inner"
 }

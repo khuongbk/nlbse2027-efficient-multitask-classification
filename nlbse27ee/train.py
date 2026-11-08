@@ -7,8 +7,12 @@ The teacher itself is trained with the same code (``configs/T0_teacher12.json``:
 pretrained init, 12 layers, no distillation), usually on several GPUs:
 ``torchrun --nproc_per_node 4 -m nlbse27ee.train --config configs/T0_teacher12.json``.
 
-Data use follows the competition guide: all 214,586 training rows train the model;
-the public test split (30,655 rows) is the official tuning/selection/validation set.
+Data use (``validation`` in the config): by default a stratified 8% split of the
+214,586 training rows selects checkpoints, thresholds and exit margins, and the
+public test split (30,655 rows) is measured once at the end as held-out data. The
+final submission recipe (``validation: none``) retrains on all training rows with
+the epoch count fixed beforehand and calibrates thresholds on the public test,
+which the guide designates for tuning.
 """
 
 from __future__ import annotations
@@ -69,6 +73,13 @@ class TrainConfig:
     use_flags: bool = True
     # objective and optimization
     use_exits: bool = True
+    exit0: bool = False         # extra exit on the embeddings, before the first transformer layer
+    head: str = "mean"          # exit pooling: "mean" or "attn"
+    ema_decay: float = 0.0      # >0: evaluate/keep an exponential moving average of the weights
+    teacher_logits: str = "teacher"   # soft targets: "teacher" (teacher_checkpoint) or "oof" (fold teachers)
+    oof_dir: str = "cache/oof"
+    fold: int = -1              # >=0: train a fold teacher without this fold and write its OOF logits
+    n_folds: int = 4
     kd_alpha: float = 0.5
     kd_temperature: float = 2.0
     epochs: int = 10
@@ -87,6 +98,13 @@ class TrainConfig:
     log_every: int = 200
     calibrate_runtime_with_baseline: bool = True
     t4_runtime_factor: float | None = None
+    # Which rows select checkpoints, thresholds and exit margins:
+    #   "inner":  a stratified 8% split of the training set; the public test is measured once at the end
+    #   "public": the public test split (allowed by the guide, but its numbers are then optimistic)
+    #   "none":   all training rows train; fixed epochs; thresholds/margins calibrated on the public test
+    validation: str = "inner"
+    val_ratio: float = 0.08
+    stop_epoch: int = 0     # >0: keep the schedule of `epochs` but stop after this epoch (final retraining)
     quick: int = 0          # >0: subsample train to this many rows (smoke tests only)
     max_steps: int = 0      # >0: stop each epoch after this many micro-batches (smoke tests)
 
@@ -169,37 +187,79 @@ def setup(cfg: TrainConfig) -> dict:
     barrier()
 
     source = load_dataset(cfg.dataset_id)
-    train, validation = source["train"], source["test"]
-    assert (len(train), len(validation)) == (TRAIN_ROWS, VALIDATION_ROWS), "dataset changed?"
+    train, public = source["train"], source["test"]
+    full_train = train
+    assert (len(train), len(public)) == (TRAIN_ROWS, VALIDATION_ROWS), "dataset changed?"
+    split_sha256 = None
+    train_global = np.arange(len(train))   # row indices into the original training split
+    oof, oof_global = None, None
+    if cfg.validation == "inner":
+        from sklearn.model_selection import train_test_split
+        labels = np.asarray(train["Label"], dtype=np.int64)
+        train_idx, val_idx = train_test_split(np.arange(len(labels)), test_size=cfg.val_ratio,
+                                              stratify=2 * labels[:, 0] + labels[:, 1],
+                                              random_state=cfg.seed)
+        train_idx, val_idx = np.sort(train_idx), np.sort(val_idx)
+        split_sha256 = hashlib.sha256(train_idx.astype("int64").tobytes()
+                                      + val_idx.astype("int64").tobytes()).hexdigest()
+        train, validation = train.select(train_idx.tolist()), train.select(val_idx.tolist())
+        train_global = train_idx
+        if cfg.fold >= 0:
+            # Fold teacher: train without one fold of the inner training rows; its logits on that
+            # fold and on the validation rows are out-of-fold soft targets for students.
+            from sklearn.model_selection import StratifiedKFold
+            inner = labels[train_idx]
+            folds = list(StratifiedKFold(cfg.n_folds, shuffle=True, random_state=cfg.seed)
+                         .split(np.zeros(len(inner)), 2 * inner[:, 0] + inner[:, 1]))
+            keep, held = folds[cfg.fold]
+            train_global, oof_global = train_idx[keep], np.concatenate([train_idx[held], val_idx])
+            train, oof = full_train.select(train_global.tolist()), full_train.select(oof_global.tolist())
+    elif cfg.fold >= 0:
+        raise ValueError("fold teachers need validation: inner")
+    elif cfg.validation in ("public", "none"):
+        validation = public
+    else:
+        raise ValueError(f"validation must be inner, public or none, not {cfg.validation!r}")
     if cfg.quick:
         rng = np.random.default_rng(cfg.seed)
-        train = train.select(np.sort(rng.choice(len(train), cfg.quick, replace=False)).tolist())
+        rows = np.sort(rng.choice(len(train), cfg.quick, replace=False))
+        train, train_global = train.select(rows.tolist()), train_global[rows]
+        # The out-of-fold rows stay complete, so any student subsample finds its soft targets.
         validation = validation.select(
-            np.sort(rng.choice(len(validation), max(cfg.quick // 4, 1000), replace=False)).tolist())
+            np.sort(rng.choice(len(validation), min(len(validation), max(cfg.quick // 4, 1000)),
+                               replace=False)).tolist())
+        public = (validation if cfg.validation != "inner" else
+                  public.select(np.sort(rng.choice(len(public), max(cfg.quick // 4, 1000), replace=False)).tolist()))
     tokenizer = AutoTokenizer.from_pretrained(cfg.tokenizer_id, revision=cfg.tokenizer_revision,
                                               use_fast=True)
     base_vocab = len(tokenizer)
     flag_ids = add_flag_tokens(tokenizer) if cfg.use_flags or cfg.teacher_use_flags else []
     log("device", torch.cuda.get_device_name(device), "x", rank_world()[1], "| train", len(train),
-        "| validation", len(validation), "| vocab", base_vocab, "->", len(tokenizer))
+        f"| validation ({cfg.validation})", len(validation), "| public test", len(public),
+        "| vocab", base_vocab, "->", len(tokenizer), "| split", split_sha256 and split_sha256[:16])
     teacher_sha = (_key(cfg.tokenizer_id, cfg.tokenizer_revision, "pretrained") if cfg.init_from_pretrained
                    else file_sha256(cfg.teacher_checkpoint))
     return {"cfg": cfg, "device": device, "work_dir": work_dir, "cache_dir": cache_dir,
-            "train": train, "validation": validation, "tokenizer": tokenizer,
+            "train": train, "validation": validation, "public": public, "tokenizer": tokenizer,
+            "split_sha256": split_sha256, "train_global": train_global,
+            "oof": oof, "oof_global": oof_global,
             "base_vocab": base_vocab, "flag_ids": flag_ids, "teacher_sha": teacher_sha,
             "fingerprints": [source["train"]._fingerprint, source["test"]._fingerprint],
             "train_labels": np.asarray(train["Label"], dtype=np.int64),
-            "val_labels": np.asarray(validation["Label"], dtype=np.int64)}
+            "val_labels": np.asarray(validation["Label"], dtype=np.int64),
+            "public_labels": np.asarray(public["Label"], dtype=np.int64)}
 
 
 def _encoded(ctx: dict, split: str, encoder: Encoder) -> Packed:
     cfg = ctx["cfg"]
     path = ctx["cache_dir"] / (f"ids_{split}_" + _key(ctx["fingerprints"], split, cfg.quick, cfg.seed,
-                                                     encoder.describe(), len(ctx["tokenizer"])) + ".npz")
+                                                     encoder.describe(), len(ctx["tokenizer"]),
+                                                     ctx["split_sha256"], cfg.validation,
+                                                     len(ctx[split]), cfg.fold, cfg.n_folds) + ".npz")
     if not path.exists() and is_main():
         start = time.time()
         packed = Packed(*pack(encoder(ctx[split]["Function"])))
-        tmp = path.with_name(path.stem + ".tmp.npz")
+        tmp = path.with_name(f"{path.stem}.{os.getpid()}.tmp.npz")   # parallel runs may build the same file
         packed.save(tmp)
         tmp.replace(path)
         log(f"encoded {split} with {encoder.describe()} in {time.time() - start:.0f}s;",
@@ -215,6 +275,9 @@ def encode_inputs(ctx: dict) -> None:
     ctx["student_encoder"] = student
     ctx["train_ids"] = _encoded(ctx, "train", student)
     ctx["val_ids"] = _encoded(ctx, "validation", student)
+    ctx["public_ids"] = _encoded(ctx, "public", student)
+    if ctx["oof"] is not None:
+        ctx["oof_ids"] = _encoded(ctx, "oof", student)
     ctx["teacher_train_ids"] = _encoded(ctx, "train", teacher)
 
 
@@ -224,9 +287,14 @@ def teacher_targets(ctx: dict) -> None:
     if cfg.kd_alpha == 0:
         ctx["teacher_logits"] = None
         return
+    if cfg.teacher_logits == "oof":
+        ctx["teacher_logits"] = load_oof_logits(cfg.oof_dir, cfg.n_folds, ctx["train_global"])
+        log(f"out-of-fold teacher logits for {len(ctx['train_global'])} rows; sign agreement with labels",
+            ((ctx["teacher_logits"] > 0) == (ctx["train_labels"] == 1)).mean(0).round(4))
+        return
     path = ctx["cache_dir"] / ("teacher_logits_" + _key(ctx["teacher_sha"], ctx["fingerprints"],
                                                         cfg.quick, cfg.seed, cfg.teacher_compact_mode,
-                                                        cfg.teacher_use_flags) + ".npy")
+                                                        cfg.teacher_use_flags, ctx["split_sha256"]) + ".npy")
     if not is_main():
         barrier()
         ctx["teacher_logits"] = np.load(path)
@@ -258,6 +326,38 @@ def teacher_targets(ctx: dict) -> None:
     barrier()
 
 
+def load_oof_logits(oof_dir, n_folds: int, rows: np.ndarray) -> np.ndarray:
+    """Soft targets for ``rows`` (training-split indices) from fold teachers that never saw them.
+
+    Inner-training rows come from the one teacher that held out their fold; inner-validation
+    rows (seen by no fold teacher) get the mean over all folds.
+    """
+    sums = np.zeros((TRAIN_ROWS, 2), dtype=np.float64)
+    counts = np.zeros(TRAIN_ROWS, dtype=np.int64)
+    for fold in range(n_folds):
+        data = np.load(Path(oof_dir) / f"fold{fold}.npz")
+        np.add.at(sums, data["global_idx"], data["logits"])
+        np.add.at(counts, data["global_idx"], 1)
+    if (counts[rows] == 0).any():
+        raise ValueError(f"{int((counts[rows] == 0).sum())} rows have no out-of-fold logits")
+    return (sums[rows] / counts[rows, None]).astype(np.float32)
+
+
+def write_oof_logits(ctx: dict, model) -> Path:
+    """Fold teacher: final-exit logits on its held-out fold and on the validation rows."""
+    cfg = ctx["cfg"]
+    logits = collect_exit_logits(model, ctx["oof_ids"], ctx["tokenizer"].pad_token_id, ctx["device"],
+                                 cfg.eval_batch)[-1]
+    out = Path(cfg.oof_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    path = out / f"fold{cfg.fold}.npz"
+    tmp = out / f"fold{cfg.fold}.tmp.npz"
+    np.savez(tmp, global_idx=ctx["oof_global"], logits=logits, fold=cfg.fold)
+    tmp.replace(path)
+    log(f"out-of-fold logits for {len(logits)} rows written to {path}")
+    return path
+
+
 def build_student(ctx: dict):
     cfg, device = ctx["cfg"], ctx["device"]
     state = (pretrained_state(cfg.tokenizer_id, cfg.tokenizer_revision, cfg.seed) if cfg.init_from_pretrained
@@ -282,7 +382,7 @@ def build_student(ctx: dict):
         sources = sorted({token for ids in seeds for token in ids})
         init = {flag: sources for flag in ctx["flag_ids"]}
     model = build_from_teacher(state, cfg.teacher_layers, keep, vocab_size=len(ctx["tokenizer"]),
-                               new_token_init=init, dropout=cfg.dropout)
+                               new_token_init=init, dropout=cfg.dropout, exit0=cfg.exit0, head=cfg.head)
     log("student:", model.cfg.layers, "layers from teacher", cfg.teacher_layers, "| FFN",
         model.cfg.ffn_sizes, "| parameters", sum(p.numel() for p in model.parameters()))
     return model
@@ -339,9 +439,13 @@ def fit(ctx: dict, model) -> dict:
         optimizer, lambda step: min((step + 1) / warmup,
                                     max(0.0, (total_updates - step) / max(1, total_updates - warmup))))
     scaler = torch.amp.GradScaler("cuda")
-    layers = model.cfg.layers
+    layers = model.cfg.exits
     weights = (torch.arange(1, layers + 1, dtype=torch.float32) if cfg.use_exits
                else torch.eye(layers)[-1]).to(device)
+    ema = None
+    if cfg.ema_decay > 0:
+        from torch.optim.swa_utils import AveragedModel, get_ema_multi_avg_fn
+        ema = AveragedModel(model, multi_avg_fn=get_ema_multi_avg_fn(cfg.ema_decay))
     weights = weights / weights.sum()
     best_path, last_path = work_dir / "best.pt", work_dir / "last.pt"
     state = {"epoch": 0, "best_f1": -1.0, "best_epoch": 0, "bad_epochs": 0, "history": []}
@@ -352,6 +456,8 @@ def fit(ctx: dict, model) -> dict:
         optimizer.load_state_dict(saved["optimizer"])
         scheduler.load_state_dict(saved["scheduler"])
         scaler.load_state_dict(saved["scaler"])
+        if ema is not None:
+            ema.load_state_dict(saved["ema"])
         state = saved["state"]
         log("resumed after epoch", state["epoch"])
     net = _AllExits(model)
@@ -363,7 +469,7 @@ def fit(ctx: dict, model) -> dict:
         f"effective batch {cfg.micro_batch * world * accumulation}, {total_updates} updates")
     temperature, alpha = cfg.kd_temperature, cfg.kd_alpha
     for epoch in range(state["epoch"] + 1, cfg.epochs + 1):
-        if state["bad_epochs"] >= cfg.patience:
+        if state["bad_epochs"] >= cfg.patience or (cfg.stop_epoch and epoch > cfg.stop_epoch):
             break
         sampler.set_epoch(epoch)
         model.train()
@@ -400,34 +506,50 @@ def fit(ctx: dict, model) -> dict:
                 if scaler.get_scale() >= scale:
                     scheduler.step()
                 optimizer.zero_grad(set_to_none=True)
+                if ema is not None:
+                    ema.update_parameters(model)
             running.append(per_exit.detach().float().cpu().numpy())
             if step % cfg.log_every == 0:
                 log(f"epoch {epoch} step {step}/{steps_per_epoch} per-exit loss",
                     np.mean(running[-cfg.log_every:], axis=0).round(4))
         if is_main():
-            all_logits = collect_exit_logits(model, ctx["val_ids"], pad, device, cfg.eval_batch)
-            thresholds, per_exit_metrics = _per_exit_metrics(all_logits, ctx["val_labels"])
-            final = per_exit_metrics[-1]
-            improved = final["mean_f1"] > state["best_f1"] + 1e-6
             row = {"epoch": epoch, "seconds": time.time() - start,
-                   "train_loss_per_exit": np.mean(running, axis=0).tolist(),
-                   "val_mean_f1_per_exit": [m["mean_f1"] for m in per_exit_metrics],
-                   "val_f1_vulnerability": final["Vulnerability"]["f1"], "val_f1_MAT": final["MAT"]["f1"],
-                   "val_mean_f1": final["mean_f1"], "improved": improved}
+                   "train_loss_per_exit": np.mean(running, axis=0).tolist()}
+            if cfg.validation == "none":
+                # Fixed epoch budget chosen beforehand: no selection, the last epoch is kept.
+                improved = True
+                state.update(best_f1=float("nan"), best_epoch=epoch, bad_epochs=0)
+            else:
+                all_logits = collect_exit_logits(ema.module if ema is not None else model,
+                                                 ctx["val_ids"], pad, device, cfg.eval_batch)
+                thresholds, per_exit_metrics = _per_exit_metrics(all_logits, ctx["val_labels"])
+                final = per_exit_metrics[-1]
+                improved = final["mean_f1"] > state["best_f1"] + 1e-6
+                row.update({"val_mean_f1_per_exit": [m["mean_f1"] for m in per_exit_metrics],
+                            "val_f1_vulnerability": final["Vulnerability"]["f1"],
+                            "val_f1_MAT": final["MAT"]["f1"], "val_mean_f1": final["mean_f1"]})
+                if improved:
+                    state.update(best_f1=final["mean_f1"], best_epoch=epoch, bad_epochs=0)
+            row["improved"] = improved
             state["history"].append(row)
             state["epoch"] = epoch
             if improved:
-                state.update(best_f1=final["mean_f1"], best_epoch=epoch, bad_epochs=0)
-                torch.save({k: v.detach().cpu() for k, v in model.state_dict().items()}, best_path)
+                kept = ema.module if ema is not None else model
+                torch.save({k: v.detach().cpu() for k, v in kept.state_dict().items()}, best_path)
             else:
                 state["bad_epochs"] += 1
             torch.save({"config": asdict(cfg), "model": model.state_dict(),
                         "optimizer": optimizer.state_dict(), "scheduler": scheduler.state_dict(),
-                        "scaler": scaler.state_dict(), "state": state}, last_path)
+                        "scaler": scaler.state_dict(), "state": state,
+                        "ema": ema.state_dict() if ema is not None else None}, last_path)
             save_json(work_dir / "history.json", state["history"])
-            log(f"epoch {epoch}: val mean F1 per exit", np.round(row["val_mean_f1_per_exit"], 4),
-                f"(vuln {row['val_f1_vulnerability']:.4f}, MAT {row['val_f1_MAT']:.4f})",
-                "*" if improved else "", f"{row['seconds']:.0f}s")
+            if cfg.validation == "none":
+                log(f"epoch {epoch}: train loss per exit", np.round(row["train_loss_per_exit"], 4),
+                    f"{row['seconds']:.0f}s")
+            else:
+                log(f"epoch {epoch}: val mean F1 per exit", np.round(row["val_mean_f1_per_exit"], 4),
+                    f"(vuln {row['val_f1_vulnerability']:.4f}, MAT {row['val_f1_MAT']:.4f})",
+                    "*" if improved else "", f"{row['seconds']:.0f}s")
         if world > 1:
             shared = [state]
             dist.broadcast_object_list(shared, src=0)
@@ -449,7 +571,7 @@ def baseline_calibration(ctx: dict) -> dict | None:
     if not cfg.calibrate_runtime_with_baseline or cfg.quick:
         return None
     log("running the organizers' baseline protocol once to calibrate runtime (cached)...")
-    result = baseline_protocol(device, ctx["validation"]["Function"], ctx["val_labels"])
+    result = baseline_protocol(device, ctx["public"]["Function"], ctx["public_labels"])
     save_json(path, result)
     log(f"baseline on {gpu}: {result['avg_runtime_s']:.1f}s, F1 {result['metrics']['mean_f1']:.4f},"
         f" T4 factor {result['t4_runtime_factor']:.3f}")
@@ -457,42 +579,66 @@ def baseline_calibration(ctx: dict) -> dict | None:
 
 
 def calibrate(ctx: dict, model) -> dict:
-    """Per-exit thresholds and score-optimal exit margins, then official-protocol measurement."""
+    """Thresholds and score-optimal exit margins on the selection split, then the public test once.
+
+    The official score is defined on the 30,655-row public set, so when the selection split
+    is smaller its GFLOPs and runtime are scaled by the row ratio inside the margin search.
+    With ``validation: inner`` the public-test measurement at the end is held out: nothing
+    above it looked at public-test labels.
+    """
     cfg, device = ctx["cfg"], ctx["device"]
     pad, labels, val_ids = ctx["tokenizer"].pad_token_id, ctx["val_labels"], ctx["val_ids"]
+    public_ids, public_labels = ctx["public_ids"], ctx["public_labels"]
+    scale = len(public_ids) / len(val_ids)
     model.to(device).half().eval()
     all_logits = collect_exit_logits(model, val_ids, pad, device, cfg.eval_batch)
     thresholds, per_exit = _per_exit_metrics(all_logits, labels)
-    layers = model.cfg.layers
+    layers = model.cfg.exits
     model.set_exit_policy(thresholds, np.full((layers, 2), np.inf))
-    no_exit = organizer_protocol(model, val_ids, labels, pad, device)
-    flops = ex.FlopsModel(val_ids.lengths, model.cfg.ffn_sizes, model.cfg.hidden_size)
-    simulated = flops.gflops(np.full(len(val_ids), layers - 1))
+    no_exit = organizer_protocol(model, val_ids, labels, pad, device)   # cost calibration run
+    flops_args = dict(hidden=model.cfg.hidden_size, exit0=model.cfg.exit0, head=model.cfg.head)
+    flops = ex.FlopsModel(val_ids.lengths, model.cfg.ffn_sizes, scale=scale, **flops_args)
+    simulated = flops.gflops(np.full(len(val_ids), layers - 1)) / scale
     calibration = baseline_calibration(ctx)
     factor = calibration["t4_runtime_factor"] if calibration else 2.0
     runtime_per_gflop = no_exit["avg_runtime_s"] * factor / no_exit["avg_gflops"]
-    log(f"no-exit: F1 {no_exit['metrics']['mean_f1']:.4f}, {no_exit['avg_runtime_s']:.2f}s local, "
-        f"{no_exit['avg_gflops']:.0f} GFLOPs (simulator {simulated:.0f}); T4 factor {factor:.3f}"
+    log(f"selection split ({cfg.validation}, {len(val_ids)} rows) without early exit: "
+        f"F1 {no_exit['metrics']['mean_f1']:.4f}, {no_exit['avg_gflops']:.0f} GFLOPs "
+        f"(simulator {simulated:.0f}); T4 factor {factor:.3f}"
         + ("" if calibration else " (ASSUMED: run baseline calibration for a real factor)"))
-    result = {"per_exit_val_mean_f1": [m["mean_f1"] for m in per_exit],
-              "thresholds": thresholds, "no_exit": _summary(no_exit, factor),
+    no_exit_score = ex.official_score(no_exit["metrics"]["mean_f1"], no_exit["avg_runtime_s"] * factor * scale,
+                                      no_exit["avg_gflops"] * scale)
+    result = {"selection_split": cfg.validation, "selection_rows": len(val_ids),
+              "split_sha256": ctx["split_sha256"], "scale_to_public": scale,
+              "per_exit_val_mean_f1": [m["mean_f1"] for m in per_exit],
+              "thresholds": thresholds,
+              "selection_no_exit": {"metrics": no_exit["metrics"], "gflops": no_exit["avg_gflops"],
+                                    "local_runtime_s": no_exit["avg_runtime_s"],
+                                    "estimated_score_at_public_scale": no_exit_score},
               "flops_simulator_ratio": simulated / no_exit["avg_gflops"],
               "t4_runtime_factor": factor, "t4_factor_source": calibration and calibration.get("gpu")}
-    final = no_exit
+    selection_score, selection_f1 = no_exit_score, no_exit["metrics"]["mean_f1"]
     if cfg.use_exits:
         search = ex.search_margins(all_logits, labels, thresholds, flops, runtime_per_gflop)
         result["search"] = {k: v for k, v in search.items() if k != "metrics"}
         result["search"]["mean_f1"] = search["metrics"]["mean_f1"]
         result["holdout"] = ex.holdout_check(
             all_logits, labels,
-            lambda rows: ex.FlopsModel(val_ids.lengths[rows], model.cfg.ffn_sizes, model.cfg.hidden_size),
+            lambda rows: ex.FlopsModel(val_ids.lengths[rows], model.cfg.ffn_sizes,
+                                       scale=len(public_ids) / int(rows.sum()), **flops_args),
             runtime_per_gflop)
         model.set_exit_policy(thresholds, search["margins"])
-        final = organizer_protocol(model, val_ids, labels, pad, device)
-        log(f"early exit: margins {np.round(search['margins'], 2).tolist()}, exits {final['exit_histogram']}")
-    result["final"] = _summary(final, factor)
-    log(f"final: F1 {final['metrics']['mean_f1']:.4f}, {final['avg_gflops']:.0f} GFLOPs, "
-        f"local {final['avg_runtime_s']:.2f}s -> est. T4 {final['avg_runtime_s'] * factor:.1f}s, "
+        selection_score, selection_f1 = search["score"], search["metrics"]["mean_f1"]
+        log(f"early exit: margins {np.round(search['margins'], 2).tolist()}, "
+            f"selection-split exits {search['exit_histogram']}")
+    result["selection"] = {"mean_f1": selection_f1, "estimated_score": selection_score}
+    public = organizer_protocol(model, public_ids, public_labels, pad, device)
+    result["final"] = {**_summary(public, factor), "split": "public_test",
+                       "held_out": cfg.validation == "inner"}
+    log(f"selection split: F1 {selection_f1:.4f}, est. score {selection_score:.4f} | "
+        f"public test ({'held out' if cfg.validation == 'inner' else 'used for selection'}): "
+        f"F1 {public['metrics']['mean_f1']:.4f}, {public['avg_gflops']:.0f} GFLOPs, "
+        f"local {public['avg_runtime_s']:.2f}s -> est. T4 {public['avg_runtime_s'] * factor:.1f}s, "
         f"est. score {result['final']['estimated_t4_score']:.4f}")
     return result
 
@@ -509,7 +655,9 @@ def _summary(measured: dict, factor: float) -> dict:
 def export(ctx: dict, model, calibration: dict, training: dict) -> Path:
     cfg = ctx["cfg"]
     metadata = {"run": cfg.name, "teacher_sha256": ctx["teacher_sha"], "best_epoch": training["best_epoch"],
-                "validation": calibration["final"]["metrics"],
+                "selection_split": cfg.validation, "split_sha256": ctx["split_sha256"],
+                "public_test": calibration["final"]["metrics"],
+                "public_test_held_out": calibration["final"]["held_out"],
                 "estimated_t4_score": calibration["final"]["estimated_t4_score"],
                 "exported_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
     out = save_model(ctx["work_dir"] / "export", model, ctx["tokenizer"], ctx["student_encoder"],
@@ -541,6 +689,11 @@ def run(cfg: TrainConfig) -> dict | None:
     if dist.is_initialized():      # the rest is single-GPU work on rank 0
         dist.destroy_process_group()
     if not main_process:
+        return None
+    if cfg.fold >= 0:
+        model.to(ctx["device"]).eval()
+        write_oof_logits(ctx, model)
+        save_json(ctx["work_dir"] / "results.json", {"config": asdict(cfg), "training": training})
         return None
     if cfg.export_teacher_to:
         save_teacher(model, cfg.export_teacher_to)

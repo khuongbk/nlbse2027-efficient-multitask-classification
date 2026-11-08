@@ -9,5 +9,6 @@
     11
   ],
   "micro_batch": 16,
-  "epochs": 14
+  "epochs": 14,
+  "validation": "inner"
 }

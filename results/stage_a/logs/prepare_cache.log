@@ -1,0 +1,11 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+14:53:41 device NVIDIA L40S x 1 | train 197419 | validation (inner) 17167 | public test 30655 | vocab 51416 -> 51418 | split bae8e73a0dffcdfc
+14:54:51 teacher logits in 64s; sign agreement with labels [0.9993 0.9998]
+14:54:55 device NVIDIA L40S x 1 | train 197419 | validation (inner) 17167 | public test 30655 | vocab 51416 -> 51418 | split bae8e73a0dffcdfc
+14:55:15 encoded train with {'max_length': 512, 'compact_mode': 'none', 'use_flags': False} in 15s; mean tokens 181.6, at max length 0.0392
+14:55:16 encoded validation with {'max_length': 512, 'compact_mode': 'none', 'use_flags': False} in 1s; mean tokens 182.4, at max length 0.0375
+14:55:18 encoded public with {'max_length': 512, 'compact_mode': 'none', 'use_flags': False} in 2s; mean tokens 181.9, at max length 0.0394
+14:55:22 device NVIDIA L40S x 1 | train 197419 | validation (inner) 17167 | public test 30655 | vocab 51416 -> 51418 | split bae8e73a0dffcdfc
+14:55:45 encoded train with {'max_length': 512, 'compact_mode': 'lines', 'use_flags': True} in 19s; mean tokens 167.5, at max length 0.0181
+14:55:46 encoded validation with {'max_length': 512, 'compact_mode': 'lines', 'use_flags': True} in 2s; mean tokens 168.0, at max length 0.0169
+14:55:49 encoded public with {'max_length': 512, 'compact_mode': 'lines', 'use_flags': True} in 3s; mean tokens 167.8, at max length 0.0191

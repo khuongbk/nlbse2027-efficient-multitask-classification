@@ -1,0 +1,44 @@
+[
+  {
+    "padding": "sorted",
+    "mean_f1": 0.9392454322526771,
+    "gflops": 55443.15807093001,
+    "runtime_s": 2.38638973236084,
+    "padded_tokens": 4910360,
+    "real_tokens": 4764112,
+    "score_with_this_gpu_runtime": 0.9593737708670721,
+    "gpu": "NVIDIA L40S",
+    "batch_size": 600,
+    "repetitions": 3,
+    "estimated_t4_runtime_s": 12.707525324821473,
+    "estimated_t4_score": 0.95730954374858
+  },
+  {
+    "padding": "dynamic",
+    "mean_f1": 0.9392454322526771,
+    "gflops": 156276.67410264403,
+    "runtime_s": 4.657402594884236,
+    "padded_tokens": 15588005,
+    "real_tokens": 4764112,
+    "score_with_this_gpu_runtime": 0.9521973338924531,
+    "gpu": "NVIDIA L40S",
+    "batch_size": 600,
+    "repetitions": 3,
+    "estimated_t4_runtime_s": 24.80066881775856,
+    "estimated_t4_score": 0.9481686806478783
+  },
+  {
+    "padding": "global",
+    "mean_f1": 0.9392454322526771,
+    "gflops": 156277.08634624002,
+    "runtime_s": 4.640297969182332,
+    "padded_tokens": 15695360,
+    "real_tokens": 4764112,
+    "score_with_this_gpu_runtime": 0.9522007273346871,
+    "gpu": "NVIDIA L40S",
+    "batch_size": 600,
+    "repetitions": 3,
+    "estimated_t4_runtime_s": 24.709586685895918,
+    "estimated_t4_score": 0.9481868695913444
+  }
+]

@@ -1,0 +1,19 @@
+{
+  "model": "A2_R11_all_full",
+  "notebook": "notebooks/NLBSE27_Submission_Colab_T4.ipynb",
+  "gpu": "Tesla T4",
+  "padding": "sorted",
+  "batch_size": 600,
+  "repetitions": 10,
+  "compute_gflops_one_pass": 55443.15807093001,
+  "avg_runtime_s_one_pass": 8.16228907108307,
+  "per_label": {
+    "Vulnerability": {"precision": 0.948262, "recall": 0.939017, "f1": 0.943617},
+    "MAT": {"precision": 0.995526, "recall": 0.881188, "f1": 0.934874}
+  },
+  "mean_precision": 0.9718938661466909,
+  "mean_recall": 0.9101026149172816,
+  "mean_f1": 0.9392454322526771,
+  "submission_score": 0.9582,
+  "baseline_submission_score": 0.7299
+}

@@ -1,0 +1,30 @@
+{
+  "name": "T0_fold0",
+  "init_from_pretrained": true,
+  "teacher_layers": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11
+  ],
+  "use_exits": false,
+  "kd_alpha": 0.0,
+  "epochs": 10,
+  "patience": 3,
+  "micro_batch": 16,
+  "effective_batch": 64,
+  "lr": 3e-05,
+  "head_lr": 0.0003,
+  "validation": "inner",
+  "fold": 0,
+  "n_folds": 4,
+  "oof_dir": "cache/oof"
+}

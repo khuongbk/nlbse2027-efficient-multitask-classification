@@ -1,0 +1,22 @@
+{
+  "name": "A2_R11_all_full",
+  "teacher_layers": [
+    1,
+    3,
+    5,
+    7,
+    9,
+    11
+  ],
+  "micro_batch": 16,
+  "ffn_size": 1536,
+  "epochs": 14,
+  "validation": "none",
+  "ema_decay": 0.999,
+  "exit0": true,
+  "head": "attn",
+  "teacher_logits": "oof",
+  "oof_dir": "cache/oof",
+  "stop_epoch": 13,
+  "teacher_checkpoint": "teacher/unixcoder12_teacher_full.pt"
+}

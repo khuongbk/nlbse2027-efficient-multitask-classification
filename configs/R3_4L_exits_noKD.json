@@ -6,5 +6,6 @@
     8,
     11
   ],
-  "kd_alpha": 0.0
+  "kd_alpha": 0.0,
+  "validation": "inner"
 }

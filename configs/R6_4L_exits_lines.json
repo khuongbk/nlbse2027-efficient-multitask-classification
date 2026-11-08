@@ -6,5 +6,6 @@
     8,
     11
   ],
-  "compact_mode": "lines"
+  "compact_mode": "lines",
+  "validation": "inner"
 }

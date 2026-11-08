@@ -1,0 +1,370 @@
+{
+  "config": {
+    "name": "R4_3L_exits",
+    "work_root": "runs",
+    "cache_dir": "cache",
+    "teacher_checkpoint": "teacher/unixcoder12_teacher.pt",
+    "teacher_compact_mode": "full",
+    "teacher_use_flags": true,
+    "init_from_pretrained": false,
+    "export_teacher_to": null,
+    "tokenizer_id": "microsoft/unixcoder-base-nine",
+    "tokenizer_revision": "refs/pr/3",
+    "dataset_id": "NLBSE/nlbse27-code-comment-classification",
+    "gpu": 2,
+    "seed": 42,
+    "teacher_layers": [
+      3,
+      7,
+      11
+    ],
+    "ffn_size": 3072,
+    "dropout": 0.1,
+    "max_length": 512,
+    "compact_mode": "full",
+    "use_flags": true,
+    "use_exits": true,
+    "kd_alpha": 0.5,
+    "kd_temperature": 2.0,
+    "epochs": 10,
+    "patience": 3,
+    "micro_batch": 32,
+    "effective_batch": 128,
+    "lr": 4e-05,
+    "head_lr": 0.0004,
+    "weight_decay": 0.01,
+    "warmup_ratio": 0.06,
+    "calib_rows": 4096,
+    "teacher_batch": 64,
+    "eval_batch": 600,
+    "num_workers": 2,
+    "log_every": 200,
+    "calibrate_runtime_with_baseline": true,
+    "t4_runtime_factor": null,
+    "validation": "inner",
+    "val_ratio": 0.08,
+    "stop_epoch": 0,
+    "quick": 0,
+    "max_steps": 0
+  },
+  "training": {
+    "epoch": 10,
+    "best_f1": 0.9247175644780784,
+    "best_epoch": 7,
+    "bad_epochs": 3,
+    "history": [
+      {
+        "epoch": 1,
+        "seconds": 91.34123921394348,
+        "train_loss_per_exit": [
+          0.7837561964988708,
+          0.5584343075752258,
+          0.45305174589157104
+        ],
+        "val_mean_f1_per_exit": [
+          0.4527295454573892,
+          0.8967162019257527,
+          0.9021603102629647
+        ],
+        "val_f1_vulnerability": 0.8722451488278163,
+        "val_f1_MAT": 0.9320754716981132,
+        "val_mean_f1": 0.9021603102629647,
+        "improved": true
+      },
+      {
+        "epoch": 2,
+        "seconds": 91.99656653404236,
+        "train_loss_per_exit": [
+          0.5337370038032532,
+          0.2946403920650482,
+          0.2748353183269501
+        ],
+        "val_mean_f1_per_exit": [
+          0.551124225869743,
+          0.9092898275187546,
+          0.9171275816757445
+        ],
+        "val_f1_vulnerability": 0.9021796916533759,
+        "val_f1_MAT": 0.9320754716981132,
+        "val_mean_f1": 0.9171275816757445,
+        "improved": true
+      },
+      {
+        "epoch": 3,
+        "seconds": 91.39520454406738,
+        "train_loss_per_exit": [
+          0.4398528039455414,
+          0.23679208755493164,
+          0.21268019080162048
+        ],
+        "val_mean_f1_per_exit": [
+          0.85297940453702,
+          0.9143748980529975,
+          0.9212775487351759
+        ],
+        "val_f1_vulnerability": 0.9084684684684684,
+        "val_f1_MAT": 0.9340866290018832,
+        "val_mean_f1": 0.9212775487351759,
+        "improved": true
+      },
+      {
+        "epoch": 4,
+        "seconds": 91.0819079875946,
+        "train_loss_per_exit": [
+          0.4040799140930176,
+          0.19535495340824127,
+          0.16972005367279053
+        ],
+        "val_mean_f1_per_exit": [
+          0.8576177261240552,
+          0.9180642733927289,
+          0.923615126831368
+        ],
+        "val_f1_vulnerability": 0.9148994265950668,
+        "val_f1_MAT": 0.9323308270676692,
+        "val_mean_f1": 0.923615126831368,
+        "improved": true
+      },
+      {
+        "epoch": 5,
+        "seconds": 88.12966823577881,
+        "train_loss_per_exit": [
+          0.3839198648929596,
+          0.15979214012622833,
+          0.1332722306251526
+        ],
+        "val_mean_f1_per_exit": [
+          0.8590938758663456,
+          0.9167677701879955,
+          0.9212324117155726
+        ],
+        "val_f1_vulnerability": 0.9124081126560979,
+        "val_f1_MAT": 0.9300567107750473,
+        "val_mean_f1": 0.9212324117155726,
+        "improved": false
+      },
+      {
+        "epoch": 6,
+        "seconds": 94.216148853302,
+        "train_loss_per_exit": [
+          0.3681001663208008,
+          0.13341741263866425,
+          0.10735469311475754
+        ],
+        "val_mean_f1_per_exit": [
+          0.861309261983203,
+          0.9168638146907395,
+          0.9229206127365344
+        ],
+        "val_f1_vulnerability": 0.9132569558101473,
+        "val_f1_MAT": 0.9325842696629214,
+        "val_mean_f1": 0.9229206127365344,
+        "improved": false
+      },
+      {
+        "epoch": 7,
+        "seconds": 92.35494208335876,
+        "train_loss_per_exit": [
+          0.3550863564014435,
+          0.11385274678468704,
+          0.08844052255153656
+        ],
+        "val_mean_f1_per_exit": [
+          0.8619794930992335,
+          0.919150409351124,
+          0.9247175644780784
+        ],
+        "val_f1_vulnerability": 0.9146120377084845,
+        "val_f1_MAT": 0.9348230912476723,
+        "val_mean_f1": 0.9247175644780784,
+        "improved": true
+      },
+      {
+        "epoch": 8,
+        "seconds": 89.65043139457703,
+        "train_loss_per_exit": [
+          0.34461572766304016,
+          0.09766678512096405,
+          0.07322246581315994
+        ],
+        "val_mean_f1_per_exit": [
+          0.8635246166785275,
+          0.9178610055871904,
+          0.9230410986087179
+        ],
+        "val_f1_vulnerability": 0.9134979275545143,
+        "val_f1_MAT": 0.9325842696629214,
+        "val_mean_f1": 0.9230410986087179,
+        "improved": false
+      },
+      {
+        "epoch": 9,
+        "seconds": 93.4493055343628,
+        "train_loss_per_exit": [
+          0.336884081363678,
+          0.08734145015478134,
+          0.06387284398078918
+        ],
+        "val_mean_f1_per_exit": [
+          0.8642002384659024,
+          0.918050167689288,
+          0.9241641986492004
+        ],
+        "val_f1_vulnerability": 0.9132634622334659,
+        "val_f1_MAT": 0.935064935064935,
+        "val_mean_f1": 0.9241641986492004,
+        "improved": false
+      },
+      {
+        "epoch": 10,
+        "seconds": 94.28930807113647,
+        "train_loss_per_exit": [
+          0.33127057552337646,
+          0.08115996420383453,
+          0.05854109302163124
+        ],
+        "val_mean_f1_per_exit": [
+          0.8636928252571651,
+          0.918141367207453,
+          0.9231041835600804
+        ],
+        "val_f1_vulnerability": 0.9128750337868275,
+        "val_f1_MAT": 0.9333333333333333,
+        "val_mean_f1": 0.9231041835600804,
+        "improved": false
+      }
+    ]
+  },
+  "calibration": {
+    "selection_split": "inner",
+    "selection_rows": 17167,
+    "split_sha256": "bae8e73a0dffcdfc31d1fc6d5c6c58caed367ce35abe6c1a8fd0ca86d4136cc8",
+    "scale_to_public": 1.7856934816799674,
+    "per_exit_val_mean_f1": [
+      0.8619463251488702,
+      0.9191904578028907,
+      0.9247175644780784
+    ],
+    "thresholds": [
+      [
+        -1.5859375,
+        1.63134765625
+      ],
+      [
+        0.908447265625,
+        0.09173583984375
+      ],
+      [
+        4.275390625,
+        1.66845703125
+      ]
+    ],
+    "selection_no_exit": {
+      "metrics": {
+        "Vulnerability": {
+          "precision": 0.9339133654202147,
+          "recall": 0.8960923623445826,
+          "f1": 0.9146120377084845,
+          "tp": 5045,
+          "fp": 357,
+          "tn": 11180,
+          "fn": 585
+        },
+        "MAT": {
+          "precision": 0.9881889763779528,
+          "recall": 0.8869257950530035,
+          "f1": 0.9348230912476723,
+          "tp": 251,
+          "fp": 3,
+          "tn": 16881,
+          "fn": 32
+        },
+        "mean_precision": 0.9610511708990838,
+        "mean_recall": 0.891509078698793,
+        "mean_f1": 0.9247175644780784
+      },
+      "gflops": 119607.86576236,
+      "local_runtime_s": 1.7723417282104492,
+      "estimated_score_at_public_scale": 0.9372211085679787
+    },
+    "flops_simulator_ratio": 0.9998553529581877,
+    "t4_runtime_factor": 5.324983345052413,
+    "t4_factor_source": "NVIDIA L40S",
+    "search": {
+      "margins": [
+        [
+          7.0,
+          6.0
+        ],
+        [
+          6.0,
+          1.0
+        ],
+        [
+          Infinity,
+          Infinity
+        ]
+      ],
+      "score": 0.9439148110526413,
+      "gflops": 133000.6118773147,
+      "runtime_s": 10.494448347869367,
+      "exit_histogram": [
+        6212,
+        8720,
+        2235
+      ],
+      "mean_f1": 0.9248006803011715
+    },
+    "holdout": {
+      "A->B": {
+        "fit_mean_f1": 0.9280231363145274,
+        "heldout_mean_f1": 0.9199334102963075
+      },
+      "B->A": {
+        "fit_mean_f1": 0.9226565214370093,
+        "heldout_mean_f1": 0.9231647521504793
+      }
+    },
+    "selection": {
+      "mean_f1": 0.9248006803011715,
+      "estimated_score": 0.9439148110526413
+    },
+    "final": {
+      "metrics": {
+        "Vulnerability": {
+          "precision": 0.926947216791851,
+          "recall": 0.8962395543175488,
+          "f1": 0.9113347832684235,
+          "tp": 9009,
+          "fp": 710,
+          "tn": 19893,
+          "fn": 1043
+        },
+        "MAT": {
+          "precision": 0.973741794310722,
+          "recall": 0.8811881188118812,
+          "f1": 0.9251559251559253,
+          "tp": 445,
+          "fp": 12,
+          "tn": 30138,
+          "fn": 60
+        },
+        "mean_precision": 0.9503445055512865,
+        "mean_recall": 0.8887138365647149,
+        "mean_f1": 0.9182453542121745
+      },
+      "local_runtime_s": 2.2743242740631104,
+      "gflops": 130204.97291790598,
+      "estimated_t4_runtime_s": 12.110738880634482,
+      "estimated_t4_score": 0.9398447332233173,
+      "exit_histogram": [
+        11219,
+        15553,
+        3883
+      ],
+      "gpu": "NVIDIA L40S",
+      "split": "public_test",
+      "held_out": true
+    }
+  }
+}
