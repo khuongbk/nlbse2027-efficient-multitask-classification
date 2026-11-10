@@ -1,4 +1,4 @@
-# Efficient multi-task code classification for NLBSE'27
+# Effective and efficient multi-task code classification
 
 Submission code for the [NLBSE'27 tool competition on code classification](https://nlbse2027.github.io/tools/):
 one model that reads a C/C++ `Function` and predicts two binary labels, `[Vulnerable, MAT]`.
