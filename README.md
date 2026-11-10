@@ -233,8 +233,8 @@ Hardware used: one machine with 4x NVIDIA L40S (48 GB). Wall time: stage A about
 per GPU, then four students), each stage B about 1.2 h.
 
 ```bash
-git clone https://github.com/khuongbk/nlbse2027-efficient-multitask-classification
-cd nlbse2027-efficient-multitask-classification
+git clone <repository-url> efficient-multitask-code-classification
+cd efficient-multitask-code-classification
 python -m venv --system-site-packages venv && . venv/bin/activate   # keeps an existing CUDA torch
 pip install -r requirements.txt
 
