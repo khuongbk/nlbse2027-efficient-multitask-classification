@@ -63,6 +63,10 @@ class TrainConfig:
     dataset_id: str = "NLBSE/nlbse27-code-comment-classification"
     gpu: int = 0
     seed: int = 42
+    # Fix the data split while varying the student training seed.
+    split_seed: int | None = None
+    # Optionally fix the FFN neuron-selection sample across seeds.
+    importance_seed: int | None = None
     # architecture
     teacher_layers: list[int] = field(default_factory=lambda: [2, 5, 8, 11])
     ffn_size: int = 3072
@@ -191,6 +195,7 @@ def setup(cfg: TrainConfig) -> dict:
     full_train = train
     assert (len(train), len(public)) == (TRAIN_ROWS, VALIDATION_ROWS), "dataset changed?"
     split_sha256 = None
+    split_seed = cfg.seed if cfg.split_seed is None else cfg.split_seed
     train_global = np.arange(len(train))   # row indices into the original training split
     oof, oof_global = None, None
     if cfg.validation == "inner":
@@ -198,7 +203,7 @@ def setup(cfg: TrainConfig) -> dict:
         labels = np.asarray(train["Label"], dtype=np.int64)
         train_idx, val_idx = train_test_split(np.arange(len(labels)), test_size=cfg.val_ratio,
                                               stratify=2 * labels[:, 0] + labels[:, 1],
-                                              random_state=cfg.seed)
+                                              random_state=split_seed)
         train_idx, val_idx = np.sort(train_idx), np.sort(val_idx)
         split_sha256 = hashlib.sha256(train_idx.astype("int64").tobytes()
                                       + val_idx.astype("int64").tobytes()).hexdigest()
@@ -209,7 +214,7 @@ def setup(cfg: TrainConfig) -> dict:
             # fold and on the validation rows are out-of-fold soft targets for students.
             from sklearn.model_selection import StratifiedKFold
             inner = labels[train_idx]
-            folds = list(StratifiedKFold(cfg.n_folds, shuffle=True, random_state=cfg.seed)
+            folds = list(StratifiedKFold(cfg.n_folds, shuffle=True, random_state=split_seed)
                          .split(np.zeros(len(inner)), 2 * inner[:, 0] + inner[:, 1]))
             keep, held = folds[cfg.fold]
             train_global, oof_global = train_idx[keep], np.concatenate([train_idx[held], val_idx])
@@ -252,7 +257,8 @@ def setup(cfg: TrainConfig) -> dict:
 
 def _encoded(ctx: dict, split: str, encoder: Encoder) -> Packed:
     cfg = ctx["cfg"]
-    path = ctx["cache_dir"] / (f"ids_{split}_" + _key(ctx["fingerprints"], split, cfg.quick, cfg.seed,
+    data_seed = cfg.seed if cfg.split_seed is None else cfg.split_seed
+    path = ctx["cache_dir"] / (f"ids_{split}_" + _key(ctx["fingerprints"], split, cfg.quick, data_seed,
                                                      encoder.describe(), len(ctx["tokenizer"]),
                                                      ctx["split_sha256"], cfg.validation,
                                                      len(ctx[split]), cfg.fold, cfg.n_folds) + ".npz")
@@ -367,7 +373,8 @@ def build_student(ctx: dict):
     if cfg.ffn_size < full:
         teacher = full_teacher(state)
         packed, pad = ctx["teacher_train_ids"], ctx["tokenizer"].pad_token_id
-        rows = np.random.default_rng(cfg.seed).choice(len(packed), min(cfg.calib_rows, len(packed)),
+        importance_seed = cfg.seed if cfg.importance_seed is None else cfg.importance_seed
+        rows = np.random.default_rng(importance_seed).choice(len(packed), min(cfg.calib_rows, len(packed)),
                                                       replace=False)
         batches = (pad_rows(packed, rows[i:i + 32], pad) for i in range(0, len(rows), 32))
         importance = ffn_importance(teacher, batches, device)
