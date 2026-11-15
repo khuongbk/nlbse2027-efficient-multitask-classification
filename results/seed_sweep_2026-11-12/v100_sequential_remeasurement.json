@@ -1,0 +1,193 @@
+{
+  "measurements": [
+    {
+      "seed": 42,
+      "gpu": "Tesla V100-SXM2-32GB",
+      "metrics": {
+        "Vulnerability": {
+          "precision": 0.9470452028591564,
+          "recall": 0.9358336649423,
+          "f1": 0.9414060545409058,
+          "tp": 9407,
+          "fp": 526,
+          "tn": 20077,
+          "fn": 645
+        },
+        "MAT": {
+          "precision": 0.9865771812080537,
+          "recall": 0.8732673267326733,
+          "f1": 0.9264705882352942,
+          "tp": 441,
+          "fp": 6,
+          "tn": 30144,
+          "fn": 64
+        },
+        "mean_precision": 0.9668111920336051,
+        "mean_recall": 0.9045504958374866,
+        "mean_f1": 0.9339383213881
+      },
+      "runtime_s": 5.041940045356751,
+      "gflops": 59935.966467474005,
+      "local_v100_score": 0.955358873725957,
+      "estimated_t4_score_factor2": 0.9543504857168856,
+      "padding": "sorted",
+      "batch_size": 600,
+      "repetitions": 10
+    },
+    {
+      "seed": 43,
+      "gpu": "Tesla V100-SXM2-32GB",
+      "metrics": {
+        "Vulnerability": {
+          "precision": 0.951906456532791,
+          "recall": 0.9313569438917628,
+          "f1": 0.9415195856589732,
+          "tp": 9362,
+          "fp": 473,
+          "tn": 20130,
+          "fn": 690
+        },
+        "MAT": {
+          "precision": 0.9844444444444445,
+          "recall": 0.8772277227722772,
+          "f1": 0.9277486910994764,
+          "tp": 443,
+          "fp": 7,
+          "tn": 30143,
+          "fn": 62
+        },
+        "mean_precision": 0.9681754504886178,
+        "mean_recall": 0.9042923333320201,
+        "mean_f1": 0.9346341383792248
+      },
+      "runtime_s": 5.40655791759491,
+      "gflops": 57069.628526994005,
+      "local_v100_score": 0.9558945295422164,
+      "estimated_t4_score_factor2": 0.9548132179586973,
+      "padding": "sorted",
+      "batch_size": 600,
+      "repetitions": 10
+    },
+    {
+      "seed": 44,
+      "gpu": "Tesla V100-SXM2-32GB",
+      "metrics": {
+        "Vulnerability": {
+          "precision": 0.953150406504065,
+          "recall": 0.9330481496219658,
+          "f1": 0.9429921576513172,
+          "tp": 9379,
+          "fp": 461,
+          "tn": 20142,
+          "fn": 673
+        },
+        "MAT": {
+          "precision": 0.9888641425389755,
+          "recall": 0.8792079207920792,
+          "f1": 0.930817610062893,
+          "tp": 444,
+          "fp": 5,
+          "tn": 30145,
+          "fn": 61
+        },
+        "mean_precision": 0.9710072745215202,
+        "mean_recall": 0.9061280352070225,
+        "mean_f1": 0.936904883857105
+      },
+      "runtime_s": 5.47331919670105,
+      "gflops": 58913.19985192201,
+      "local_v100_score": 0.957120719818128,
+      "estimated_t4_score_factor2": 0.9560260559787879,
+      "padding": "sorted",
+      "batch_size": 600,
+      "repetitions": 10
+    },
+    {
+      "seed": 45,
+      "gpu": "Tesla V100-SXM2-32GB",
+      "metrics": {
+        "Vulnerability": {
+          "precision": 0.9529423721922959,
+          "recall": 0.9327497015519299,
+          "f1": 0.9427379216731184,
+          "tp": 9376,
+          "fp": 463,
+          "tn": 20140,
+          "fn": 676
+        },
+        "MAT": {
+          "precision": 0.9778270509977827,
+          "recall": 0.8732673267326733,
+          "f1": 0.9225941422594142,
+          "tp": 441,
+          "fp": 10,
+          "tn": 30140,
+          "fn": 64
+        },
+        "mean_precision": 0.9653847115950394,
+        "mean_recall": 0.9030085141423017,
+        "mean_f1": 0.9326660319662663
+      },
+      "runtime_s": 4.978590416908264,
+      "gflops": 58963.45330139399,
+      "local_v100_score": 0.9546730042096185,
+      "estimated_t4_score_factor2": 0.9536772861262369,
+      "padding": "sorted",
+      "batch_size": 600,
+      "repetitions": 10
+    },
+    {
+      "seed": 46,
+      "gpu": "Tesla V100-SXM2-32GB",
+      "metrics": {
+        "Vulnerability": {
+          "precision": 0.9537772347790674,
+          "recall": 0.9319538400318345,
+          "f1": 0.9427392573211231,
+          "tp": 9368,
+          "fp": 454,
+          "tn": 20149,
+          "fn": 684
+        },
+        "MAT": {
+          "precision": 0.9866962305986696,
+          "recall": 0.8811881188118812,
+          "f1": 0.9309623430962344,
+          "tp": 445,
+          "fp": 6,
+          "tn": 30144,
+          "fn": 60
+        },
+        "mean_precision": 0.9702367326888686,
+        "mean_recall": 0.9065709794218578,
+        "mean_f1": 0.9368508002086787
+      },
+      "runtime_s": 5.270610570907593,
+      "gflops": 56085.239941266,
+      "local_v100_score": 0.9573173420149415,
+      "estimated_t4_score_factor2": 0.9562632199007599,
+      "padding": "sorted",
+      "batch_size": 600,
+      "repetitions": 10
+    }
+  ],
+  "means": {
+    "runtime_s": 5.234203629493713,
+    "gflops": 58193.49761781,
+    "local_v100_score": 0.9560728938621722,
+    "estimated_t4_score_factor2": 0.9550260531362735,
+    "mean_f1": 0.934998835159875,
+    "mean_precision": 0.9683230722655303,
+    "mean_recall": 0.9049100715881376
+  },
+  "sample_sd": {
+    "runtime_s": 0.21823789813201286,
+    "gflops": 1569.6204092484247,
+    "local_v100_score": 0.0011344514163006657,
+    "estimated_t4_score_factor2": 0.001101300354864859,
+    "mean_f1": 0.001854889492682444,
+    "mean_precision": 0.002334982624212956,
+    "mean_recall": 0.0014464496363840128
+  },
+  "note": "Sequential V100 remeasurement; score is still not an official T4/hidden-test score."
+}

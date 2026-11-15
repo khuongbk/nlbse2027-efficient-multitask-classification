@@ -53,11 +53,12 @@ def organizer_protocol(model, packed: Packed, labels: np.ndarray, pad_id: int, d
         del input_ids, attention_mask, outputs
         torch.cuda.empty_cache()
     assert (predictions >= 0).all(), "some rows were not predicted"
+    n_exits = getattr(getattr(model, "cfg", None), "exits", 0)   # keep empty trailing exits
     metrics = label_metrics(labels, predictions)
     runtime, gflops = total_time / repetitions, total_flops / repetitions
     return {"metrics": metrics, "avg_runtime_s": runtime, "avg_gflops": gflops,
             "score_local_runtime": official_score(metrics["mean_f1"], runtime, gflops),
-            "exit_histogram": np.bincount(exit_layers).tolist(),
+            "exit_histogram": np.bincount(exit_layers, minlength=n_exits).tolist(),
             "gpu": torch.cuda.get_device_name(device), "batch_size": batch_size,
             "repetitions": repetitions, "padding": padding,
             "padded_tokens": int(padded_tokens), "real_tokens": int(packed.lengths.sum()),

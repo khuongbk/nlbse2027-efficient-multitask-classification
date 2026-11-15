@@ -23,16 +23,24 @@ profiler FLOPs, 10 repetitions):
 | Model | Vuln P / R / F1 | MAT P / R / F1 | Mean P / R / F1 | GFLOPs | Runtime (s) | Score |
 |---|---|---|---|---:|---:|---:|
 | CodeBERT baseline (official, T4) | 0.9427 / 0.9353 / 0.9390 | 0.9783 / 0.8020 / 0.8814 | 0.9605 / 0.8687 / 0.9102 | 2,666,510 | 192.10 | 0.7299 |
-| **Submission** (`A2_R11_all_full`) | 0.9483 / 0.9390 / 0.9436 | 0.9955 / 0.8812 / 0.9349 | 0.9719 / 0.9101 / **0.9392** | **55,443** | **8.16** (T4) | **0.9582** (T4) |
-| Same recipe, held out (`A2_R11_all`) | 0.9494 / 0.9276 / 0.9384 | 0.9910 / 0.8733 / 0.9284 | 0.9702 / 0.9004 / 0.9334 | 53,214 | 8.33 (T4) | 0.9548 (T4) |
+| **Submission** (`A2_R11_all_seed45`) | 0.9529 / 0.9328 / **0.9427** | 0.9778 / 0.8733 / **0.9226** | 0.9654 / 0.9030 / **0.9327** | **58,966** | **9.85** (T4) | **0.9537** (T4) |
+| Same recipe, five seeds (mean ± SD) | 0.9518 / 0.9330 / 0.9423 ± 0.0008 | 0.9849 / 0.8768 / 0.9277 ± 0.0035 | 0.9683 / 0.9049 / 0.9350 ± 0.0019 | 58,193 ± 1,570 | | |
 
-The submission is trained on all training rows and calibrates its thresholds on the public test (see
-"Data use and model selection"); the held-out row is the same recipe trained on 92% of the training
-rows and never tuned on the public test, so it is the unbiased estimate and the one comparable to the
-baseline, which also never consults the public test before its single evaluation. Both rows were measured
-on a Colab Tesla T4 with `notebooks/NLBSE27_Submission_Colab_T4.ipynb`
-(`results/stage_b/colab_t4_A2_R11_all_full.json`, `results/stage_a2/colab_t4_A2_R11_all.json`). The model has 68.7M parameters (teacher 125.3M)
-and a row runs 1.07 of its 6 transformer layers on average.
+The submission is the `A2_R11_all` recipe trained on 92% of the training rows with five seeds
+(42-46); seed 45 is submitted because it has the highest official score on the selection rows, the
+criterion used for every other choice. The public test plays no part in training, calibration or the
+choice of seed, so its numbers are held out, as are the baseline's. Every seed exceeds the baseline in
+F1 on both labels. Measured on a Colab Tesla T4 with `notebooks/NLBSE27_Submission_Colab_T4.ipynb`
+(`results/seed_sweep_2026-11-12/colab_t4_A2_R11_all_seed45.json`); the five-seed row is from
+`results/seed_sweep_2026-11-12/` (V100, so no runtime). The model has 68.7M parameters (teacher
+125.3M) and a row runs 1.09 of its 6 transformer layers on average.
+
+Two earlier models of the same recipe were also measured on the T4 and are kept for reference:
+`A2_R11_all` (first training run, mean F1 0.9334, 53,214 GFLOPs, 8.33 s, score 0.9548;
+`results/stage_a2/colab_t4_A2_R11_all.json`) and `A2_R11_all_full` (retrained on all training rows,
+thresholds calibrated on the public test, mean F1 0.9392, 55,443 GFLOPs, 8.16 s, score 0.9582;
+`results/stage_b/colab_t4_A2_R11_all_full.json`). The seed sweep's margin search used an assumed
+runtime factor, so its GFLOPs are not directly comparable with these.
 
 ## Method
 
@@ -60,10 +68,10 @@ and a row runs 1.07 of its 6 transformer layers on average.
 |---|---|
 | 197,419 training rows (92%) | training teachers and students in the research stages |
 | 17,167 training rows (8%, stratified on both labels, seed 42) | selecting epochs, thresholds, exit margins and the winning configuration |
-| 30,655 public-test rows (`ds["test"]`) | measured **once** per research model, after all choices were made (held out) |
-| all 214,586 training rows | the final retraining of the selected recipe |
+| 30,655 public-test rows (`ds["test"]`) | measured **once** per model, after all choices were made (held out) |
+| all 214,586 training rows | stage B only (full-data variant, not submitted) |
 
-The work ran in three stages, all with the same split and code:
+The work ran in four stages, all with the same split:
 
 - **Stage A** (`scripts/run_stage_a.sh`): the teacher and 12 students (R0-R11); the winner on the
   selection split is R11 (6 layers, FFN 1,536, early exit).
@@ -73,11 +81,12 @@ The work ran in three stages, all with the same split and code:
 - **Stage B** (`scripts/run_stage_b.sh`): the teacher and the winner are retrained on all 214,586
   training rows, each stopped at its selected epoch, and the thresholds and exit margins are calibrated
   on the public test split, which the guide designates for "model tuning, selection, and validation
-  reporting". This retrained model is the submission.
+  reporting". This full-data variant (`A2_R11_all_full`) was the first submission candidate; it is
+  kept for reference but not submitted, because its calibration used the public test.
+- **Seed sweep** (`scripts/run_seed_sweep.sh`): `A2_R11_all` retrained with five seeds on the 92%
+  split; the seed with the highest selection score (45) is the submission.
 
-Public-test numbers of the research models (stages A and A2) are therefore held-out estimates. The
-submission's public-test numbers use the public test for threshold calibration only; its held-out
-counterpart is `A2_R11_all`. An earlier exploratory round that selected models on the public test is
+Public-test numbers of every model except `A2_R11_all_full` are therefore held-out estimates. An earlier exploratory round that selected models on the public test is
 kept in `results/exploratory_public_selection/`; it reached the same conclusions, but its numbers are
 optimistic (for example its teacher scored F1 0.9455 on the public test versus 0.9428 held out).
 
@@ -88,7 +97,7 @@ independent of the GPU. Runtimes were measured on an NVIDIA L40S and converted w
 (the baseline's official T4 runtime divided by the same baseline cell on the L40S, which reproduced its
 2,666,510 GFLOPs and F1 0.9102 exactly); they are **estimates** except where marked T4. In an earlier
 check the estimate was conservative (15.1 s estimated, 12.6 s measured on a T4), and for the
-submission too (11.6 s estimated, 8.16 s measured on a T4).
+full-data model `A2_R11_all_full` too (11.6 s estimated, 8.16 s measured on a T4).
 
 ### Stage A: architecture and input (`results/stage_a/`)
 
@@ -121,6 +130,23 @@ scaled to the public test's size); runs are chosen by it.
 | A2_R11_ema_exit0_attn | + EMA + exit 0 + attention pooling | 0.9588 | 0.9361 | 63,689 | 0.9548 |
 | **A2_R11_all** | + all three (winner) | **0.9604** | 0.9334 | **53,214** | 0.9541 (T4: 0.9548) |
 
+### Seed variation of the winner (`results/seed_sweep_2026-11-12/`)
+
+`A2_R11_all` retrained with five training seeds (42-46) on the same split, teacher and
+out-of-fold targets; each run selects its epoch, thresholds and margins on the selection rows, and
+the public test is measured once per run (no seed is chosen on it). Mean ± sample SD:
+
+| | Vulnerability F1 | MAT F1 | Mean F1 | GFLOPs |
+|---|---:|---:|---:|---:|
+| Five seeds | 0.9423 ± 0.0008 | 0.9277 ± 0.0035 | **0.9350 ± 0.0019** | 58,193 ± 1,570 |
+| CodeBERT baseline | 0.9390 | 0.8814 | 0.9102 | 2,666,510 |
+
+The gain over the baseline (+0.025 mean F1) is about 13 standard deviations. These runs used
+V100s and an assumed runtime factor of 2.0 in the margin search, so their GFLOPs are not directly
+comparable with the table above (see the folder's README). Only the winner was repeated; the
+ablation rows above are single runs, and differences below about 0.002 F1 between them are within
+seed variation.
+
 ### What the ablations show
 
 - **Compaction + flag tokens** (R0 to R1): +0.0045 public F1 (MAT +0.012) and 14% fewer GFLOPs.
@@ -129,7 +155,7 @@ scaled to the public test's size); runs are chosen by it.
   3,072 to 1,536 neurons keeps F1 and removes about a third of the cost.
 - **Exit 0 + attention pooling is the largest single gain**: GFLOPs fall from 111k to 54-64k, because
   35% of the rows are decided on the embeddings alone (exit 0 reaches mean F1 0.84 on its own) and
-  later exits decide more rows. In the submission, 24% of the rows exit on the embeddings and another 52% after the first layer.
+  later exits decide more rows. In the full-data model, 24% of the rows exit on the embeddings and another 52% after the first layer.
 - **Distilling from a teacher that fits its training set does not help** (R3 without distillation
   matches or beats R2): the teacher's logits have the sign of the hard label on 99.94% (Vulnerable) and
   99.99% (MAT) of its training rows. **Out-of-fold soft targets** (each row scored by a fold teacher
@@ -140,9 +166,9 @@ scaled to the public test's size); runs are chosen by it.
 - **Public test vs. selection split:** every model scores lower on the public test than on the
   selection rows (about 0.005-0.008 F1), so held-out reporting matters.
 
-### MAT error analysis (submission, public test)
+### MAT error analysis (full-data model `A2_R11_all_full`, public test)
 
-MAT is highly imbalanced: 505 of 30,655 test functions (1.65%) are positive. The submission makes
+MAT is highly imbalanced: 505 of 30,655 test functions (1.65%) are positive. The full-data model makes
 445 true positives, 2 false positives and 60 false negatives (precision 0.9955, recall 0.8812). By the
 flag token each function receives:
 
@@ -154,9 +180,11 @@ flag token each function receives:
 
 All 60 false negatives are functions whose `Function` text contains no `TODO`/`FIXME`/`HACK`/`XXX`;
 on the 451 functions with a tag, the model misses none. MAT recall is bounded by what `Function`
-contains (61 of 505 positives, 12.1%, have no tag), not by the model.
+contains (61 of 505 positives, 12.1%, have no tag), not by the model. The submission (`A2_R11_all_seed45`) makes 441 true positives, 10 false
+positives and 64 false negatives on MAT (precision 0.9778, recall 0.8733); its breakdown by tag has not
+been computed.
 
-### Early-exit policy of the submission
+### Early-exit policy of the full-data model (`A2_R11_all_full`)
 
 Per-exit thresholds `tau[k, label]` (logit space) and margins `m[k, label]`, calibrated on the public
 test; "F1 alone" is the mean F1 if every row stopped at that exit.
@@ -184,7 +212,7 @@ modes (`python -m nlbse27ee.padding_ablation`):
 | `dynamic`: each batch padded to its longest row, original order | 15,588,005 | 0.9392 | 156,277 | 4.66 |
 | `sorted`: rows sorted by length, then `dynamic` (used for all reported results) | 4,910,360 | 0.9392 | 55,443 | 2.39 |
 
-Submission, `results/stage_b/padding_ablation_A2_R11_all_full_l40s.json`; the real token count is
+Full-data model, `results/stage_b/padding_ablation_A2_R11_all_full_l40s.json`; the real token count is
 4,764,112. Dynamic padding alone changes nothing at batch 600: almost every batch of 600 rows in the
 original order contains a 512-token row, and in all modes the model trims a batch to its remaining
 rows' longest row after each exit. Sorting by length is what makes per-batch padding effective. Of
@@ -273,10 +301,12 @@ GFLOPs and the submission score; `RUN_PADDING_ABLATION = True` also measures all
 
 ```
 nlbse27ee/        preprocessing, model, training, calibration, evaluation, export
-configs/          T0 (teacher), T0_fold0-3 (fold teachers), R0-R11, A2_R11_* (students); final/ (stage B)
-scripts/          run_stage_a.sh, run_stage_a2.sh, run_stage_b.sh
+configs/          T0 (teacher), T0_fold0-3 (fold teachers), R0-R11, A2_R11_* (students); final/ (stage B);
+                  seed_sweep/ (five seeds of A2_R11_all)
+scripts/          run_stage_a.sh, run_stage_a2.sh, run_stage_b.sh; run_seed_sweep.sh (five seeds of the winner)
 notebooks/        training walkthrough; Colab T4 evaluation
-results/          stage_a/, stage_a2/, stage_b/: config, history and results of every run, logs, summaries;
+results/          stage_a/, stage_a2/, stage_b/, seed_sweep_2026-11-12/: config, history and results of every
+                  run, logs, summaries;
                   exploratory_public_selection/: the earlier round that selected on the public test
 docs/             COMPLIANCE.md: each competition requirement and where it is met;
                   SOLUTION_STORY.md: the solution told as a story (Vietnamese);

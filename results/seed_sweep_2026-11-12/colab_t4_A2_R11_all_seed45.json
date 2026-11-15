@@ -1,0 +1,22 @@
+{
+  "model": "A2_R11_all_seed45",
+  "role": "submission",
+  "selection": "highest official score on the inner selection rows among seeds 42-46; public test not used",
+  "notebook": "notebooks/NLBSE27_Submission_Colab_T4.ipynb",
+  "gpu": "Tesla T4",
+  "padding": "sorted",
+  "batch_size": 600,
+  "repetitions": 10,
+  "compute_gflops_one_pass": 58966.08735937798,
+  "avg_runtime_s_one_pass": 9.84533703327179,
+  "per_label": {
+    "Vulnerability": {"precision": 0.952942, "recall": 0.932750, "f1": 0.942738},
+    "MAT": {"precision": 0.977827, "recall": 0.873267, "f1": 0.922594}
+  },
+  "mean_precision": 0.9653847115950394,
+  "mean_recall": 0.9030085141423017,
+  "mean_f1": 0.9326660319662663,
+  "submission_score": 0.9537,
+  "baseline_submission_score": 0.7299,
+  "public_test_held_out": true
+}
