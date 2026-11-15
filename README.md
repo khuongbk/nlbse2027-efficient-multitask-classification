@@ -121,6 +121,23 @@ scaled to the public test's size); runs are chosen by it.
 | A2_R11_ema_exit0_attn | + EMA + exit 0 + attention pooling | 0.9588 | 0.9361 | 63,689 | 0.9548 |
 | **A2_R11_all** | + all three (winner) | **0.9604** | 0.9334 | **53,214** | 0.9541 (T4: 0.9548) |
 
+### Seed variation of the winner (`results/seed_sweep_2026-11-12/`)
+
+`A2_R11_all` retrained with five training seeds (42-46) on the same split, teacher and
+out-of-fold targets; each run selects its epoch, thresholds and margins on the selection rows, and
+the public test is measured once per run (no seed is chosen on it). Mean ± sample SD:
+
+| | Vulnerability F1 | MAT F1 | Mean F1 | GFLOPs |
+|---|---:|---:|---:|---:|
+| Five seeds | 0.9423 ± 0.0008 | 0.9277 ± 0.0035 | **0.9350 ± 0.0019** | 58,193 ± 1,570 |
+| CodeBERT baseline | 0.9390 | 0.8814 | 0.9102 | 2,666,510 |
+
+The gain over the baseline (+0.025 mean F1) is about 13 standard deviations. These runs used
+V100s and an assumed runtime factor of 2.0 in the margin search, so their GFLOPs are not directly
+comparable with the table above (see the folder's README). Only the winner was repeated; the
+ablation rows above are single runs, and differences below about 0.002 F1 between them are within
+seed variation.
+
 ### What the ablations show
 
 - **Compaction + flag tokens** (R0 to R1): +0.0045 public F1 (MAT +0.012) and 14% fewer GFLOPs.
@@ -273,10 +290,12 @@ GFLOPs and the submission score; `RUN_PADDING_ABLATION = True` also measures all
 
 ```
 nlbse27ee/        preprocessing, model, training, calibration, evaluation, export
-configs/          T0 (teacher), T0_fold0-3 (fold teachers), R0-R11, A2_R11_* (students); final/ (stage B)
-scripts/          run_stage_a.sh, run_stage_a2.sh, run_stage_b.sh
+configs/          T0 (teacher), T0_fold0-3 (fold teachers), R0-R11, A2_R11_* (students); final/ (stage B);
+                  seed_sweep/ (five seeds of A2_R11_all)
+scripts/          run_stage_a.sh, run_stage_a2.sh, run_stage_b.sh; run_seed_sweep.sh (five seeds of the winner)
 notebooks/        training walkthrough; Colab T4 evaluation
-results/          stage_a/, stage_a2/, stage_b/: config, history and results of every run, logs, summaries;
+results/          stage_a/, stage_a2/, stage_b/, seed_sweep_2026-11-12/: config, history and results of every
+                  run, logs, summaries;
                   exploratory_public_selection/: the earlier round that selected on the public test
 docs/             COMPLIANCE.md: each competition requirement and where it is met;
                   SOLUTION_STORY.md: the solution told as a story (Vietnamese);

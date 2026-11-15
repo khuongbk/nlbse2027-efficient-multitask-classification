@@ -62,11 +62,9 @@ class TrainConfig:
     tokenizer_revision: str | None = "refs/pr/3"
     dataset_id: str = "NLBSE/nlbse27-code-comment-classification"
     gpu: int = 0
-    seed: int = 42
-    # Fix the data split while varying the student training seed.
-    split_seed: int | None = None
-    # Optionally fix the FFN neuron-selection sample across seeds.
-    importance_seed: int | None = None
+    seed: int = 42                        # training randomness: init, dropout, batch order
+    split_seed: int | None = None         # inner split, folds, `quick` sample; None = seed
+    importance_seed: int | None = None    # rows used to rank FFN neurons; None = seed
     # architecture
     teacher_layers: list[int] = field(default_factory=lambda: [2, 5, 8, 11])
     ffn_size: int = 3072
@@ -117,6 +115,11 @@ class TrainConfig:
         values = json.loads(Path(path).read_text(encoding="utf-8"))
         values.update({k: v for k, v in overrides.items() if v is not None})
         return cls(**values)
+
+
+def data_seed(cfg: TrainConfig) -> int:
+    """Seed of everything that defines the data: split, folds, `quick` sample, caches."""
+    return cfg.seed if cfg.split_seed is None else cfg.split_seed
 
 
 def rank_world() -> tuple[int, int]:
@@ -195,7 +198,7 @@ def setup(cfg: TrainConfig) -> dict:
     full_train = train
     assert (len(train), len(public)) == (TRAIN_ROWS, VALIDATION_ROWS), "dataset changed?"
     split_sha256 = None
-    split_seed = cfg.seed if cfg.split_seed is None else cfg.split_seed
+    split_seed = data_seed(cfg)
     train_global = np.arange(len(train))   # row indices into the original training split
     oof, oof_global = None, None
     if cfg.validation == "inner":
@@ -226,7 +229,7 @@ def setup(cfg: TrainConfig) -> dict:
     else:
         raise ValueError(f"validation must be inner, public or none, not {cfg.validation!r}")
     if cfg.quick:
-        rng = np.random.default_rng(cfg.seed)
+        rng = np.random.default_rng(split_seed)
         rows = np.sort(rng.choice(len(train), cfg.quick, replace=False))
         train, train_global = train.select(rows.tolist()), train_global[rows]
         # The out-of-fold rows stay complete, so any student subsample finds its soft targets.
@@ -257,8 +260,7 @@ def setup(cfg: TrainConfig) -> dict:
 
 def _encoded(ctx: dict, split: str, encoder: Encoder) -> Packed:
     cfg = ctx["cfg"]
-    data_seed = cfg.seed if cfg.split_seed is None else cfg.split_seed
-    path = ctx["cache_dir"] / (f"ids_{split}_" + _key(ctx["fingerprints"], split, cfg.quick, data_seed,
+    path = ctx["cache_dir"] / (f"ids_{split}_" + _key(ctx["fingerprints"], split, cfg.quick, data_seed(cfg),
                                                      encoder.describe(), len(ctx["tokenizer"]),
                                                      ctx["split_sha256"], cfg.validation,
                                                      len(ctx[split]), cfg.fold, cfg.n_folds) + ".npz")
@@ -299,7 +301,7 @@ def teacher_targets(ctx: dict) -> None:
             ((ctx["teacher_logits"] > 0) == (ctx["train_labels"] == 1)).mean(0).round(4))
         return
     path = ctx["cache_dir"] / ("teacher_logits_" + _key(ctx["teacher_sha"], ctx["fingerprints"],
-                                                        cfg.quick, cfg.seed, cfg.teacher_compact_mode,
+                                                        cfg.quick, data_seed(cfg), cfg.teacher_compact_mode,
                                                         cfg.teacher_use_flags, ctx["split_sha256"]) + ".npy")
     if not is_main():
         barrier()
@@ -375,7 +377,7 @@ def build_student(ctx: dict):
         packed, pad = ctx["teacher_train_ids"], ctx["tokenizer"].pad_token_id
         importance_seed = cfg.seed if cfg.importance_seed is None else cfg.importance_seed
         rows = np.random.default_rng(importance_seed).choice(len(packed), min(cfg.calib_rows, len(packed)),
-                                                      replace=False)
+                                                             replace=False)
         batches = (pad_rows(packed, rows[i:i + 32], pad) for i in range(0, len(rows), 32))
         importance = ffn_importance(teacher, batches, device)
         keep = [torch.topk(importance[layer], cfg.ffn_size).indices.sort().values.cpu()
