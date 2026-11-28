@@ -42,6 +42,20 @@ thresholds calibrated on the public test, mean F1 0.9392, 55,443 GFLOPs, 8.16 s,
 `results/stage_b/colab_t4_A2_R11_all_full.json`). The seed sweep's margin search used an assumed
 runtime factor, so its GFLOPs are not directly comparable with these.
 
+## Trained models
+
+All trained weights are in this Google Drive folder: **[model weights](https://drive.google.com/drive/folders/15d69UiXW34jmRD6LKUDsOwJ55SFX81pq?usp=drive_link)**.
+The submitted model is `nlbse27_submission_seed45.zip`. Each zip is a self-contained export (fp16
+weights, tokenizer, exit policy and a copy of `nlbse27ee`), so it runs without training anything.
+
+To reproduce the submission score on a Colab T4:
+
+1. Download `nlbse27_submission_seed45.zip` from the folder and put it in your Google Drive at
+   `MyDrive/nlbse27/` (or change `MODEL_ZIP` to wherever you put it).
+2. Open `notebooks/NLBSE27_Submission_Colab_T4.ipynb` on a T4 runtime and run all cells.
+3. The notebook prints per-label P/R/F1, their means, runtime, GFLOPs and the score; expect mean F1
+   0.9327, about 58,966 GFLOPs and a score of about 0.954 (runtime varies slightly between T4s).
+
 ## Method
 
 1. **Teacher.** `microsoft/unixcoder-base-nine` (12 layers) fine-tuned with binary cross-entropy
@@ -292,7 +306,8 @@ Notes:
 
 ### Evaluating on Colab T4
 
-`runs/<name>/export/` is self-contained (fp16 weights, tokenizer, exit policy, and a copy of
+To evaluate a released model, use the zips in the [model weights](https://drive.google.com/drive/folders/15d69UiXW34jmRD6LKUDsOwJ55SFX81pq?usp=drive_link) folder (see
+[Trained models](#trained-models)). For your own runs, `runs/<name>/export/` is self-contained (fp16 weights, tokenizer, exit policy, and a copy of
 `nlbse27ee`). Zip it, open `notebooks/NLBSE27_Submission_Colab_T4.ipynb` on a T4 runtime, set
 `MODEL_ZIP` (or `MODEL_SOURCE`), and run all. It prints per-label P/R/F1, their means, runtime,
 GFLOPs and the submission score; `RUN_PADDING_ABLATION = True` also measures all padding modes.
